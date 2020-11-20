@@ -5,7 +5,7 @@
 #include <string>
 
 enum CmdClass{GO, HM, SQ, BH, BV};
-const char* classStrings = {"GO", "HM", "SQ", "BH", "BV"};
+const std::string cmdClassStrings[] = {"GO", "HM", "SQ", "BH", "BV"};
 // GOto, HoMe, SQare, Burn Horizontal, Burn Vertical
 
 class LaserInstruction
