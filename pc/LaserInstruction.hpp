@@ -2,21 +2,23 @@
 #define LASERINSTRUCTION_HPP
 
 #include <functional>
+#include <string>
 
 enum CmdClass{GO, HM, SQ, BH, BV};
+const char* classStrings = {"GO", "HM", "SQ", "BH", "BV"};
 // GOto, HoMe, SQare, Burn Horizontal, Burn Vertical
 
 class LaserInstruction
 {
   public:
-    LaserInstruction(CmdClass commandType, std::function<void(std::string*)> dispCallback);
+    LaserInstruction(std::function<void(std::string*)> dispCallback);
     LaserInstruction(CmdClass commandType, uint32_t arg1, uint32_t arg2, std::function<void(std::string*)> dispCallback);
-    send();
+    void send();
   protected:
     std::function<void(std::string*)> m_displayCallback;
-    uint32_t x; // x coordinate location
-    uint32_t y; // y coordinate location
-    uint32_t p; // power value
+    CmdClass m_class;
+    uint32_t m_arg1;
+    uint32_t m_arg2;
 };
 
 
