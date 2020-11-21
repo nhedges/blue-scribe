@@ -12,7 +12,6 @@
 void uart_send(std::string* txt)
 {
   std::cout << *txt;
-  std::cout << std::endl;
 }
 
 int main(int argc, char **argv)
@@ -38,6 +37,45 @@ int main(int argc, char **argv)
   instructions.push_back(LaserInstruction(GO,20,30,
       [&](std::string* txt){ uart_send(txt);}
       ));
+  for (int r = 0; r < Y_MAX; r++)
+  {
+    for (int c = 0; c < X_MAX; c++)
+    {
+      auto pixHere = image.at<uchar>(r, c);
+      if (pixHere != 0)
+      {
+        instructions.push_back(
+          LaserInstruction( // move to this pixel
+            GO,
+            r,
+            c,
+            [&](std::string* txt){ uart_send(txt);}
+          )
+        );
+      }
+      uint32_t extend = 1;
+      if (pixHere == image.at<uchar>(r, c+1))
+      {
+        for (int c2 = c;
+            (c < X_MAX) && (image.at<uchar>(r,c2) == pixHere);
+            c2++,extend++);
+      }
+      if (pixHere != 0) // we skip blank space
+      {
+        instructions.push_back(
+          LaserInstruction(
+            BH,
+            extend,
+            pixHere,
+            [&](std::string* txt){ uart_send(txt);}
+          )
+        );
+      }
+      c += extend;
+
+    }
+
+  }
 
   for (int i = 0; i < instructions.size(); i++)
   {
