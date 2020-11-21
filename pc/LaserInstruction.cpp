@@ -3,6 +3,7 @@
 LaserInstruction::LaserInstruction(std::function<void(std::string*)> dispCallback)
 {
   m_class = CmdClass::HM; // home is the default
+  m_displayCallback = dispCallback;
 }
 
 LaserInstruction::LaserInstruction(CmdClass commandType, uint32_t arg1, uint32_t arg2, std::function<void(std::string*)> dispCallback):
