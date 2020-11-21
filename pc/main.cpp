@@ -20,8 +20,26 @@ int main(int argc, char **argv)
   cv::Mat image;
   // read in the image as a grayscale image
   image = cv::imread(inPath, cv::IMREAD_GRAYSCALE);
+  cv::Size imageSize = image.size();
+  uint32_t xLimit, yLimit;
+  if (imageSize.width < X_MAX)
+  {
+    xLimit = imageSize.width;
+  }
+  else
+  {
+    xLimit = X_MAX;
+  }
+  if (imageSize.height < Y_MAX)
+  {
+    yLimit = imageSize.height;
+  }
+  else
+  {
+    yLimit = Y_MAX;
+  }
   //crop down the image to the print size
-  image = image(cv::Rect(0,0,X_MAX,Y_MAX));
+  image = image(cv::Rect(0,0,xLimit,yLimit));
 
   std::string windName = "Preview";
   cv::namedWindow(windName);
@@ -37,9 +55,9 @@ int main(int argc, char **argv)
   instructions.push_back(LaserInstruction(GO,20,30,
       [&](std::string* txt){ uart_send(txt);}
       ));
-  for (int r = 0; r < Y_MAX; r++)
+  for (int r = 0; r < yLimit; r++)
   {
-    for (int c = 0; c < X_MAX; c++)
+    for (int c = 0; c < xLimit; c++)
     {
       auto pixHere = image.at<uchar>(r, c);
       if (pixHere != 0)
@@ -57,7 +75,7 @@ int main(int argc, char **argv)
       if (pixHere == image.at<uchar>(r, c+1))
       {
         for (int c2 = c;
-            (c < X_MAX) && (image.at<uchar>(r,c2) == pixHere);
+            (c < xLimit) && (image.at<uchar>(r,c2) == pixHere);
             c2++,extend++);
       }
       if (pixHere != 0) // we skip blank space
