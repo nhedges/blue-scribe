@@ -71,11 +71,11 @@ int main(int argc, char **argv)
           )
         );
       }
-      uint32_t extend = 1;
+      uint32_t extend = 0;
       if (pixHere == image.at<uchar>(r, c+1))
       {
-        for (int c2 = c;
-            (c < xLimit) && (image.at<uchar>(r,c2) == pixHere);
+        for (int c2 = c+1;
+            (c2 < xLimit) && (image.at<uchar>(r,c2) == pixHere);
             c2++,extend++);
       }
       if (pixHere != 0) // we skip blank space
