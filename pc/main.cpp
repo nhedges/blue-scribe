@@ -15,6 +15,11 @@ void uart_send(std::string* txt)
 {
   std::cout << *txt;
   pSerial->sendLine(*txt);
+  std::string input;
+  while(input.compare("AK") != 0)
+  {
+    input = pSerial->getLine();
+  }
 }
 
 int main(int argc, char **argv)
