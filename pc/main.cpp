@@ -49,12 +49,10 @@ int main(int argc, char **argv)
   std::cin >> temp;
 
   std::vector<LaserInstruction> instructions;
-  instructions.push_back(LaserInstruction(
+  instructions.push_back(LaserInstruction( // start from home
       [&](std::string* txt){ uart_send(txt);}
       ));
-  instructions.push_back(LaserInstruction(GO,20,30,
-      [&](std::string* txt){ uart_send(txt);}
-      ));
+
   for (int r = 0; r < yLimit; r++)
   {
     for (int c = 0; c < xLimit; c++)
@@ -94,6 +92,9 @@ int main(int argc, char **argv)
     }
 
   }
+  instructions.push_back(LaserInstruction( // go home at the end
+      [&](std::string* txt){ uart_send(txt);}
+      ));
 
   for (int i = 0; i < instructions.size(); i++)
   {
