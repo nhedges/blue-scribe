@@ -62,58 +62,132 @@
 //
 //****************************************************************************************************************
 
-int counter = 60; //sets up our counter variable
 int state = 0; //variable to keep track of the state we are in
 int motorTarget = 0; //variable to keep track of our motor target
 const uint32_t motorSpeed = 62353; //Predefined value to feed into our systick reload register to get our motor to move slow
 const uint8_t motorHalfSteps[] =  {0x40, 0x80, 0x4, 0x8};//{0x40, 0xc0, 0x80, 0x84, 0x4, 0xc, 0x8, 0x48}; //setting the correct bits to 1 for a motor half step
-const int motorMask = 0xcc;
+const int motorMaskH = 0xcc;
+const int motorMaskV = 0x3c00;
 int direction = 0; //0 = stop, 1 = CW, -1 = CCW
-int motorLocation = 0; //temp variable for current motor location
-int digits = 0;
-int speed = 1; // Speed = 1 is slow speed, speed = 2 is medium speed, speed = 3 is fast speed
+int hv = 0; //0 = horizontal, 1 = vertical
+int motorLocationX = 0; //temp variable for current motor x position
+int motorLocationY = 0; //temp variable for current motor y position
+
+
 
 void SysTick_Initialize(uint32_t ticks)
 {
 	SysTick->CTRL = 0; // disable counter and IRQ
 	SysTick->LOAD = ticks - 1; // set the load register
-
 	//make systick least urgent
 	NVIC_SetPriority(SysTick_IRQn, (1<<__NVIC_PRIO_BITS)-1);
-	
-	
 	SysTick->VAL = 0; // reset counter value
-	
 	SysTick->CTRL |= SysTick_CTRL_CLKSOURCE_Msk; // 1 = processor clock 0=ext clk
 	SysTick->CTRL |= SysTick_CTRL_TICKINT_Msk; // enable systick interrupt
 	SysTick->CTRL |= SysTick_CTRL_ENABLE_Msk; // enable timer
 }
 
-
-void motor_move(uint8_t* speed){ //our function that prints the char to the lcd if a button is pressed
+void moveVertical(uint8_t distance, uint8_t direction, uint8_t speed){ //our function that prints the char to the lcd if a button is pressed
 	
 		
 		SysTick_Initialize(motorSpeed / speed); // reload value for fast wind up
-		motorTarget = (counter % 60) * 69; //gets the correct final motor location
-		direction = 1; //sets the direction to clock wise
+		motorTarget = (distance % 60) * 69; //gets the correct final motor location
+		direction = this->direction; //sets the direction
 		SysTick->CTRL |= SysTick_CTRL_ENABLE_Msk; //enables the systick timer
 	
 	
 }
 
+void moveHorizontal(uint8_t* distance, uint8_t direction, uint8_t* speed){ //our function that prints the char to the lcd if a button is pressed
+	
+		
+		SysTick_Initialize(motorSpeed / this->speed); // reload value for fast wind up
+		motorTarget = (distance % 60) * 69; //gets the correct final motor location
+		direction = this->direction; //sets the direction
+		SysTick->CTRL |= SysTick_CTRL_ENABLE_Msk; //enables the systick timer
+	
+	
+}
+
+void goTo(uint8_t posx, uint8_t posy){
+
+	int tempx = motorLocationX - posx;
+	int tempy = motorLocationY - posy;
+
+	if (tempx < 0){
+		direction = 1;
+		tempx *= -1;
+	}
+	else{
+		direction = -1;
+	}
+	
+	moveHorizontal(tempx, direction, 3);
+	while(motorLocationX != posx);
+
+	if (tempy < 0){
+		direction = 1;
+		tempy *= -1;
+	}
+	else{
+		direction = 1;
+	}
+	
+	moveVertical(tempx, direction, 3);
+	while(motorLocationY != posy);
+
+
+}
+
+void home(void){
+	goTo(0,0);
+}
+
+
+void sq(uint8_t sidelength, uint8_t startx, uint8_t starty){
+	
+	//potential make variables for each corner location
+	goTo(startx, starty);
+
+	moveHorizontal(sidelength, 1, 2);
+	while(motorLocationX != 1);// need a way to tell if it is done moving
+
+	moveVertical(tempx, direction, 3);
+	while(motorLocationY != 1);
+
+	moveHorizontal(sidelength, 1, 2);
+	while(motorLocationX != 1);
+
+	moveVertical(tempx, direction, 3);
+	while(motorLocationY != 1);
+
+}
 	
 void SysTick_Handler(void)
 {
-	if(direction != 0){
+
+	if (!hv){
+		if(direction != 0){
 		motorLocation += direction;
-		uint8_t motorTemp = motorHalfSteps[motorLocation%4];
-		GPIOB->ODR &= ~motorMask;
-		GPIOB->ODR |= (motorMask & motorTemp);
+		uint8_t motorTempx = motorHalfSteps[motorLocation%4];
+		GPIOB->ODR &= ~motorMaskH;
+		GPIOB->ODR |= (motorMaskH & motorTempx);
 			  	
 		}
+	}
+	else{
+		if(direction != 0){
+		motorLocation += direction;
+		uint8_t motorTempy = motorHalfSteps[motorLocation%4];
+		GPIOE->ODR &= ~motorMaskV;
+		GPIOE->ODR |= (motorMaskV & motorTempy);
+			  	
+		}
+	}
+	
 		
 		if(motorLocation == motorTarget){
-			//do something once we get to the correct location
+			direction = 0;
 		}
 		
 }
@@ -123,36 +197,28 @@ int main(void){
 	// Switch system clock to HSI
 	RCC->CR |= RCC_CR_HSION;  // set clock control reg to use HSI clock
 	while ((RCC->CR & RCC_CR_HSIRDY) == 0); // wait until HSI clock is ready
-	
 	RCC->CFGR &= ~(RCC_CFGR_SW); //Selecet HSI as system clock source
 	RCC->CFGR |= RCC_CFGR_SW_HSI; //Select HSI as system clock source
-
 	while ((RCC->CFGR & RCC_CFGR_SWS) == 0); //Wait until HSI is used as system clock source
 
-	RCC->AHB2ENR |= RCC_AHB2ENR_GPIOBEN;
+	RCC->AHB2ENR |= (RCC_AHB2ENR_GPIOBEN | RCC_AHB2ENR_GPIOEEN);
 
+	GPIOB->MODER &= ~( GPIO_MODER_MODE2_1 | GPIO_MODER_MODE3_1 | GPIO_MODER_MODE6_1 | GPIO_MODER_MODE7_1); //Setting the GPIOB mode registers to input mode for pins 2,3,6,7
 
-	 GPIOB->MODER &= ~( GPIO_MODER_MODE2_1 | 
-	 GPIO_MODER_MODE3_1 |
-	 GPIO_MODER_MODE6_1 |
-		GPIO_MODER_MODE7_1);
- //Setting the GPIOB mode registers to input mode for pins 2,3,6,7
-	
-		GPIOB->MODER |= ( GPIO_MODER_MODE2_0 | 
-		GPIO_MODER_MODE3_0 | 
-		GPIO_MODER_MODE6_0 | 
-		GPIO_MODER_MODE7_0);
-//Seeting the GPIOB mode registers to output mode for pins 2,3,6,7 by orring a 1 into the 0 bit of the mode
-		
-		
-		GPIOB->OTYPER &= ~(GPIO_OTYPER_OT2 |
-		GPIO_OTYPER_OT3 |
-		GPIO_OTYPER_OT6 |
-			GPIO_OTYPER_OT7);
-//Seeting the GPIOB output type registers to push pull for pins 2,3,6,7
+	GPIOB->MODER |= ( GPIO_MODER_MODE2_0 | GPIO_MODER_MODE3_0 | GPIO_MODER_MODE6_0 | GPIO_MODER_MODE7_0); //Seeting the GPIOB mode registers to output mode for pins 2,3,6,7 by orring a 1 into the 0 bit of the mode
+
+	GPIOB->OTYPER &= ~(GPIO_OTYPER_OT2 | GPIO_OTYPER_OT3 | GPIO_OTYPER_OT6 | GPIO_OTYPER_OT7); //Seeting the GPIOB output type registers to push pull for pins 2,3,6,7
+
+	GPIOE->MODER &= ~(GPIO_MODER_MODE10_1 | GPIO_MODER_MODE11_1 | GPIO_MODER_MODE12_1 | GPIO_MODER_MODE13_1); //Setting the GPIOE mode registers to input mode for pins 10,11,12,13
+
+	GPIOE->MODER |= (GPIO_MODER_MODE10_0 | GPIO_MODER_MODE11_0 | GPIO_MODER_MODE12_0 | GPIO_MODER_MODE13_0); //Seeting the GPIOE mode registers to output mode for pins 10,11,12,13 by orring a 1 into the 0 bit of the mode
+
+	GPIOE->OTYPER &= ~(GPIO_OTYPER_OT10 | GPIO_OTYPER_OT11 | GPIO_OTYPER_OT12 | GPIO_OTYPER_OT13); //Seeting the GPIOE output type registers to push pull for pins 10,11,12,13
+
+	home(); //reset the laser position
 
 	
-	motor_move(speed);
+
 	
 	
 	while(1);
