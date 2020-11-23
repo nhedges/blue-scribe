@@ -5,13 +5,16 @@
 #include <opencv4/opencv2/core/core.hpp>
 #include <opencv4/opencv2/highgui/highgui.hpp>
 #include <opencv4/opencv2/imgproc/imgproc.hpp>
+#include "serial.hpp"
 
 #define X_MAX 500
 #define Y_MAX 500
+static Serial* pSerial;
 
 void uart_send(std::string* txt)
 {
   std::cout << *txt;
+  pSerial->sendLine(*txt);
 }
 
 int main(int argc, char **argv)
@@ -47,6 +50,7 @@ int main(int argc, char **argv)
   cv::waitKey(0);
   std::string temp; // wait for input before continuing
   std::cin >> temp;
+  pSerial = new Serial("/dev/ttyUSB0");
 
   std::vector<LaserInstruction> instructions;
   instructions.push_back(LaserInstruction( // start from home
