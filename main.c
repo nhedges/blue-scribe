@@ -73,7 +73,50 @@ int hv = 0; //0 = horizontal, 1 = vertical
 int motorLocationX = 0; //temp variable for current motor x position
 int motorLocationY = 0; //temp variable for current motor y position
 
+void pininit(){
 
+	GPIOB->MODER &= ~( GPIO_MODER_MODE2_1 | GPIO_MODER_MODE3_1 | GPIO_MODER_MODE6_1 | GPIO_MODER_MODE7_1); //Setting the GPIOB mode registers to input mode for pins 2,3,6,7
+
+	GPIOB->MODER |= ( GPIO_MODER_MODE2_0 | GPIO_MODER_MODE3_0 | GPIO_MODER_MODE6_0 | GPIO_MODER_MODE7_0); //Seeting the GPIOB mode registers to output mode for pins 2,3,6,7 by orring a 1 into the 0 bit of the mode
+
+	GPIOB->OTYPER &= ~(GPIO_OTYPER_OT2 | GPIO_OTYPER_OT3 | GPIO_OTYPER_OT6 | GPIO_OTYPER_OT7); //Seeting the GPIOB output type registers to push pull for pins 2,3,6,7
+
+	GPIOE->MODER &= ~(GPIO_MODER_MODE10_1 | GPIO_MODER_MODE11_1 | GPIO_MODER_MODE12_1 | GPIO_MODER_MODE13_1); //Setting the GPIOE mode registers to input mode for pins 10,11,12,13
+
+	GPIOE->MODER |= (GPIO_MODER_MODE10_0 | GPIO_MODER_MODE11_0 | GPIO_MODER_MODE12_0 | GPIO_MODER_MODE13_0); //Seeting the GPIOE mode registers to output mode for pins 10,11,12,13 by orring a 1 into the 0 bit of the mode
+
+	GPIOE->OTYPER &= ~(GPIO_OTYPER_OT10 | GPIO_OTYPER_OT11 | GPIO_OTYPER_OT12 | GPIO_OTYPER_OT13); //Seeting the GPIOE output type registers to push pull for pins 10,11,12,13
+
+	GPIOE->MODER &= ~(GPIO_MODER_MODE8); //Seeting the GPIO mode register to alternate function mode for pin 8
+
+	GPIOE->MODER |= (GPIO_MODER_MODE8_1); //Setting the GPIOE mode register to alternate function mode for pin 8
+
+	GPIOE->AFR[1] &= ~(0xF); //Selecting AF mode 1
+
+	GPIOE->AFR[1] |= 0x1; //Selecting AF mode 1
+
+	GPIOE->OSPEEDER &= ~(GPIO_OSPEEDER_OSPEEDR8); //Seeting output speed 
+
+	GPIOE->PUPDR &= ~(GPIO_PUPDR_PUPD8); //Selecting no pull up or pull down
+
+}
+
+void timer1init(){
+
+	RCC->APB2ENR |= RCC_APB2ENR_TIM1EN; // Enable the timer 1 clock
+	TIM1->CR1 &= ~TIM_CR1_DIR; //Select up counting
+	TIM1->PSC = 159; //change this value for whatever we need
+	TIM1->ARR = 999; //Set PWM period change this value
+	TIM1->CCMR1 &= ~TIM_CCMR1_OC1M; //Clear output compare mode bits for channel 1
+	TIM1->CCMR1 |= TIM_CCMR1_OC1M; //Select PWM mode 2 oupt on Channel 1
+	TIM1->CCMR1 |= TIM_CCMR1_OC1PE; //Output 1 preload enable
+	TIM1->CCER &= ~TIM_CCER_CC1NP; //Select output polarity
+	TIM1->CCER |= TIM_CCER_CC1NE; //Enable complemtary output of channel 1 
+	TIM1->BDTR |= TIM_BDTR_MOE; //Main output enable
+	TIM1->CCR1 = 500; //initial duty cycle change this value
+	TIM1->CR1 |= TIM1_CR1_CEN; //Enable TIM1
+
+}
 
 void SysTick_Initialize(uint32_t ticks)
 {
@@ -203,21 +246,11 @@ int main(void){
 
 	RCC->AHB2ENR |= (RCC_AHB2ENR_GPIOBEN | RCC_AHB2ENR_GPIOEEN);
 
-	GPIOB->MODER &= ~( GPIO_MODER_MODE2_1 | GPIO_MODER_MODE3_1 | GPIO_MODER_MODE6_1 | GPIO_MODER_MODE7_1); //Setting the GPIOB mode registers to input mode for pins 2,3,6,7
-
-	GPIOB->MODER |= ( GPIO_MODER_MODE2_0 | GPIO_MODER_MODE3_0 | GPIO_MODER_MODE6_0 | GPIO_MODER_MODE7_0); //Seeting the GPIOB mode registers to output mode for pins 2,3,6,7 by orring a 1 into the 0 bit of the mode
-
-	GPIOB->OTYPER &= ~(GPIO_OTYPER_OT2 | GPIO_OTYPER_OT3 | GPIO_OTYPER_OT6 | GPIO_OTYPER_OT7); //Seeting the GPIOB output type registers to push pull for pins 2,3,6,7
-
-	GPIOE->MODER &= ~(GPIO_MODER_MODE10_1 | GPIO_MODER_MODE11_1 | GPIO_MODER_MODE12_1 | GPIO_MODER_MODE13_1); //Setting the GPIOE mode registers to input mode for pins 10,11,12,13
-
-	GPIOE->MODER |= (GPIO_MODER_MODE10_0 | GPIO_MODER_MODE11_0 | GPIO_MODER_MODE12_0 | GPIO_MODER_MODE13_0); //Seeting the GPIOE mode registers to output mode for pins 10,11,12,13 by orring a 1 into the 0 bit of the mode
-
-	GPIOE->OTYPER &= ~(GPIO_OTYPER_OT10 | GPIO_OTYPER_OT11 | GPIO_OTYPER_OT12 | GPIO_OTYPER_OT13); //Seeting the GPIOE output type registers to push pull for pins 10,11,12,13
+	
+	piniit();
+	timer1init();
 
 	home(); //reset the laser position
-
-	
 
 	
 	
