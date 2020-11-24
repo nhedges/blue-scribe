@@ -1,5 +1,5 @@
 #include "stm32l476xx.h"
-
+#include <stdio.h>
 
 //*************************************  32L476GDISCOVERY ***************************************************************************
 // STM32L4:  STM32L476VGT6 MCU = ARM Cortex-M4 + FPU + DSP, 
@@ -68,12 +68,18 @@ const uint32_t motorSpeed = 62353; //Predefined value to feed into our systick r
 const uint8_t motorHalfSteps[] =  {0x40, 0x80, 0x4, 0x8};//{0x40, 0xc0, 0x80, 0x84, 0x4, 0xc, 0x8, 0x48}; //setting the correct bits to 1 for a motor half step
 const int motorMaskH = 0xcc;
 const int motorMaskV = 0x3c00;
-int direction = 0; //0 = stop, 1 = CW, -1 = CCW
+int directionX = 0; //0 = stop, 1 = CW, -1 = CCW
+int directiony = 0; //0 = stop, 1 = CW, -1 = CCW
 int hv = 0; //0 = horizontal, 1 = vertical
 int motorLocationX = 0; //temp variable for current motor x position
 int motorLocationY = 0; //temp variable for current motor y position
 
 void pininit(){
+
+	//only need 2 pins for each motor. 1 for direction 1 for stepping. direction is either high or low. stepping needs a wave
+	//pin d5 d6 for uart look at lab 9 set up to echo input back
+	//2 pins for home switches . input mode pull down resistor then logic low when switch is closed.
+	//Pin E8 for laser PWM
 
 	GPIOB->MODER &= ~( GPIO_MODER_MODE2_1 | GPIO_MODER_MODE3_1 | GPIO_MODER_MODE6_1 | GPIO_MODER_MODE7_1); //Setting the GPIOB mode registers to input mode for pins 2,3,6,7
 
@@ -95,7 +101,7 @@ void pininit(){
 
 	GPIOE->AFR[1] |= 0x1; //Selecting AF mode 1
 
-	GPIOE->OSPEEDER &= ~(GPIO_OSPEEDER_OSPEEDR8); //Seeting output speed 
+	GPIOE->OSPEEDR &= ~(GPIO_OSPEEDER_OSPEEDR8); //Seeting output speed 
 
 	GPIOE->PUPDR &= ~(GPIO_PUPDR_PUPD8); //Selecting no pull up or pull down
 
@@ -105,7 +111,7 @@ void timer1init(){
 
 	RCC->APB2ENR |= RCC_APB2ENR_TIM1EN; // Enable the timer 1 clock
 	TIM1->CR1 &= ~TIM_CR1_DIR; //Select up counting
-	TIM1->PSC = 159; //change this value for whatever we need
+	TIM1->PSC = 15; //change this value for whatever we need
 	TIM1->ARR = 999; //Set PWM period change this value
 	TIM1->CCMR1 &= ~TIM_CCMR1_OC1M; //Clear output compare mode bits for channel 1
 	TIM1->CCMR1 |= TIM_CCMR1_OC1M; //Select PWM mode 2 oupt on Channel 1
@@ -113,8 +119,8 @@ void timer1init(){
 	TIM1->CCER &= ~TIM_CCER_CC1NP; //Select output polarity
 	TIM1->CCER |= TIM_CCER_CC1NE; //Enable complemtary output of channel 1 
 	TIM1->BDTR |= TIM_BDTR_MOE; //Main output enable
-	TIM1->CCR1 = 500; //initial duty cycle change this value
-	TIM1->CR1 |= TIM1_CR1_CEN; //Enable TIM1
+	TIM1->CCR1 = 990; //initial duty cycle change this value
+	TIM1->CR1 |= TIM_CR1_CEN; //Enable TIM1
 
 }
 
@@ -130,23 +136,23 @@ void SysTick_Initialize(uint32_t ticks)
 	SysTick->CTRL |= SysTick_CTRL_ENABLE_Msk; // enable timer
 }
 
-void moveVertical(uint8_t distance, uint8_t direction, uint8_t speed){ //our function that prints the char to the lcd if a button is pressed
+void moveVertical(uint8_t distance, uint8_t directiontemp, uint8_t speed){ //our function that prints the char to the lcd if a button is pressed
 	
 		
 		SysTick_Initialize(motorSpeed / speed); // reload value for fast wind up
 		motorTarget = (distance % 60) * 69; //gets the correct final motor location
-		direction = this->direction; //sets the direction
+		direction = directiontemp; //sets the direction
 		SysTick->CTRL |= SysTick_CTRL_ENABLE_Msk; //enables the systick timer
 	
 	
 }
 
-void moveHorizontal(uint8_t* distance, uint8_t direction, uint8_t* speed){ //our function that prints the char to the lcd if a button is pressed
+void moveHorizontal(uint8_t distance, uint8_t directiontemp, uint8_t speed){ //our function that prints the char to the lcd if a button is pressed
 	
 		
-		SysTick_Initialize(motorSpeed / this->speed); // reload value for fast wind up
+		SysTick_Initialize(motorSpeed / speed); // reload value for fast wind up
 		motorTarget = (distance % 60) * 69; //gets the correct final motor location
-		direction = this->direction; //sets the direction
+		direction = directiontemp; //sets the direction
 		SysTick->CTRL |= SysTick_CTRL_ENABLE_Msk; //enables the systick timer
 	
 	
@@ -195,24 +201,24 @@ void sq(uint8_t sidelength, uint8_t startx, uint8_t starty){
 	moveHorizontal(sidelength, 1, 2);
 	while(motorLocationX != 1);// need a way to tell if it is done moving
 
-	moveVertical(tempx, direction, 3);
+	moveVertical(sidelength, direction, 3);
 	while(motorLocationY != 1);
 
 	moveHorizontal(sidelength, 1, 2);
 	while(motorLocationX != 1);
 
-	moveVertical(tempx, direction, 3);
+	moveVertical(sidelength, direction, 3);
 	while(motorLocationY != 1);
 
 }
 	
 void SysTick_Handler(void)
 {
-
+//if not at destination then step. if at destination for both change state. 
 	if (!hv){
 		if(direction != 0){
-		motorLocation += direction;
-		uint8_t motorTempx = motorHalfSteps[motorLocation%4];
+		motorLocationX += direction;
+		uint8_t motorTempx = motorHalfSteps[motorLocationX%4];
 		GPIOB->ODR &= ~motorMaskH;
 		GPIOB->ODR |= (motorMaskH & motorTempx);
 			  	
@@ -220,8 +226,8 @@ void SysTick_Handler(void)
 	}
 	else{
 		if(direction != 0){
-		motorLocation += direction;
-		uint8_t motorTempy = motorHalfSteps[motorLocation%4];
+		motorLocationY += direction;
+		uint8_t motorTempy = motorHalfSteps[motorLocationY%4];
 		GPIOE->ODR &= ~motorMaskV;
 		GPIOE->ODR |= (motorMaskV & motorTempy);
 			  	
@@ -229,7 +235,7 @@ void SysTick_Handler(void)
 	}
 	
 		
-		if(motorLocation == motorTarget){
+		if(motorLocationX == motorTarget || motorLocationY == motorTarget){
 			direction = 0;
 		}
 		
@@ -247,13 +253,13 @@ int main(void){
 	RCC->AHB2ENR |= (RCC_AHB2ENR_GPIOBEN | RCC_AHB2ENR_GPIOEEN);
 
 	
-	piniit();
+	pininit();
 	timer1init();
 
 	home(); //reset the laser position
+	
 
-	
-	
+
 	while(1);
 
 
