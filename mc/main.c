@@ -66,15 +66,20 @@ int state = 0; //variable to keep track of the state we are in
 int motorTargetX = 0; //variable to keep track of our motor target
 int motorTargetY = 0; //variable to keep track of our motor target
 const uint32_t motorSpeed = 62353; //Predefined value to feed into our systick reload register to get our motor to move slow
-const uint8_t motorHalfSteps[] =  {0x40, 0x80, 0x4, 0x8};//{0x40, 0xc0, 0x80, 0x84, 0x4, 0xc, 0x8, 0x48}; //setting the correct bits to 1 for a motor half step
+// const uint8_t motorHalfStepsX[] =  {0x40, 0x80, 0x4, 0x8};//{0x40, 0xc0, 0x80, 0x84, 0x4, 0xc, 0x8, 0x48}; //setting the correct bits to 1 for a motor half step
+// const uint8_t motorHalfStepsX[] =  {0x40, 0x80, 0x4, 0x8};//{0x40, 0xc0, 0x80, 0x84, 0x4, 0xc, 0x8, 0x48}; //setting the correct bits to 1 for a motor half step
 const int motorMaskH = 0xc;
 const int motorMaskV = 0xcf;
-int directionX = 0; //0 = CW, 1 = CCW
-int directiony = 0; //0 = CW, 1 = CCW
+uint8_t directionX = 0; //0 = CW, 1 = CCW
+uint8_t directiony = 0; //0 = CW, 1 = CCW
 int h = 0 //0 = horizontal stopped. 1 = horizontal moving
 int v = 0; //0 = vertical stopped. 1 = horizontal moving
 int motorLocationX = 0; //temp variable for current motor x position
 int motorLocationY = 0; //temp variable for current motor y position
+uint8_t steppingx = 0;
+uint8_t steppingy = 0;
+int readyx = 0;
+int readyy = 0;
 
 const uint8_t BufferSize = 128;
 uint8_t USART2_Buffer_Rx[BufferSize];
@@ -278,7 +283,6 @@ void goTo(uint8_t posx, uint8_t posy){
 	}
 	//moves the horizontal motor to the correct location
 	moveHorizontal(tempx, directionX, 3, 0);
-	while(motorLocationX != posx);
 	//Checks to see if moving forward or backward on the vertical plane
 	if (tempy < 0){
 		direction = 1;
@@ -289,8 +293,6 @@ void goTo(uint8_t posx, uint8_t posy){
 	}
 	//moves the vertical motor to the correct location
 	moveVertical(tempx, directionY, 3, 0);
-	while(motorLocationY != posy);
-
 
 }
 
@@ -335,28 +337,70 @@ void sq(uint8_t sidelength, uint8_t startx, uint8_t starty){
 void SysTick_Handler(void)
 {
 //if not at destination then step. if at destination for both change state. 
-	if (!hv){
-		if(direction != 0){
-		motorLocationX += direction;
-		uint8_t motorTempx = motorHalfSteps[motorLocationX%4];
-		GPIOB->ODR &= ~motorMaskH;
-		GPIOB->ODR |= (motorMaskH & motorTempx);
-			  	
+	if (h){
+		int directiontempx = 0;
+		//creates a temp direction for indexing the motor location
+		if (directionX == 0){
+			directiontempx = -1;
 		}
+		else{
+			directiontempx = 1;
+		}
+		//increments or deincrements the motor location as neccesary
+		motorLocationX += directiontempx;
+		//creates a temp variable to store both our direction and stepping variable
+		uint8_t motorTempx = ((directionX << 3) | (steppingx << 2));//Gpiob pin 2 controls the stepping of the motor and pin 3 controls direction
+
+
+		//Updates the pin as necessary
+		GPIOB->ODR &= ~motorMaskH; //clears pins 2 and 3 on gpiob
+		GPIOB->ODR |= (motorTempx); //sets the direction and stepping pins
+
+		//alternates stepping as neccesary. stepping must input a square wave so it should alternate between 0 and 1
+		if (steppingx){
+			steppingx = 0;
+		}
+		else{
+			steppingx = 1;
+		}
+		
+		
 	}
-	else{
-		if(direction != 0){
-		motorLocationY += direction;
-		uint8_t motorTempy = motorHalfSteps[motorLocationY%4];
-		GPIOE->ODR &= ~motorMaskV;
-		GPIOE->ODR |= (motorMaskV & motorTempy);
-			  	
+	if(v){
+		int directiontempy = 0;
+		//creates a temp direction for indexing the motor location
+		if (directionY == 0){
+			directiontempy = -1;
 		}
+		else{
+			directiontempy = 1;
+		}
+		//increments or deincrements the motor location as neccesary
+		motorLocationY += directiontempy;
+		//creates a temp variable to store both our direction and stepping variable
+		uint8_t motorTempy = ((directionY << 7) | (steppingy << 6)); //Gpiob pin 6 controls the stepping of the motor and pin 7 controls direction
+
+		//Updates the pin as necessary
+		GPIOB->ODR &= ~motorMaskV; //clears pins 2 and 3 on gpiob
+		GPIOB->ODR |= (motorTempy); //sets the direction and stepping pins
+
+		//alternates stepping as neccesary. stepping must input a square wave so it should alternate between 0 and 1
+		if (steppingy){
+			steppingy = 0;
+		}
+		else{
+			steppingy = 1;
+		}
+		
 	}
 	
-		
-		if(motorLocationX == motorTarget || motorLocationY == motorTarget){
-			direction = 0;
+		if(motorLocationX == motorTargetX){
+			h = 0;
+			readyx = 1;
+		}
+		if(motorLocationY == motorTargetY){
+			v = 0;
+			readyy = 1;
 		}
 		
 }
