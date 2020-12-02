@@ -19,6 +19,10 @@ void uart_send(std::string* txt)
   while(input.compare("AK") != 0)
   {
     input = pSerial->getLine();
+    if (input.compare(0,2,"CM") == 0)
+    {
+      std::cout << "Debug: "<< input << std::endl;
+    }
   }
 }
 
