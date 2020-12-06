@@ -1,5 +1,5 @@
 #include "stm32l476xx.h"
-
+#include <stdio.h>
 
 //*************************************  32L476GDISCOVERY ***************************************************************************
 // STM32L4:  STM32L476VGT6 MCU = ARM Cortex-M4 + FPU + DSP, 
@@ -61,174 +61,419 @@
 // PA3  = OPAMP1_VOUT (Joy Up)        PB0 = OPAMP2_VOUT (LCD SEG21)
 //
 //****************************************************************************************************************
+enum State {idling, moving, homing, recving, sending};
+enum MotorStages {rising = 1, falling = 0};
+static enum MotorStages xMotorStage = rising;
+static enum MotorStages yMotorStage = rising;
+volatile enum State state = 0; //variable to keep track of the state we are in
+static int motorTargetX = 0; //variable to keep track of our motor target
+static int motorTargetY = 0; //variable to keep track of our motor target
+static const uint32_t motorSpeed = 62353; //Predefined value to feed into our systick reload register to get our motor to move slow
+// const uint8_t motorHalfStepsX[] =  {0x40, 0x80, 0x4, 0x8};//{0x40, 0xc0, 0x80, 0x84, 0x4, 0xc, 0x8, 0x48}; //setting the correct bits to 1 for a motor half step
+// const uint8_t motorHalfStepsX[] =  {0x40, 0x80, 0x4, 0x8};//{0x40, 0xc0, 0x80, 0x84, 0x4, 0xc, 0x8, 0x48}; //setting the correct bits to 1 for a motor half step
+const uint32_t motorMaskX = 0xc;
+const uint32_t motorMaskY = 0xc0;
+static uint8_t directionX = 0; //0 = CW, 1 = CCW
+static uint8_t directionY = 0; //0 = CW, 1 = CCW
+static int h = 0; //0 = horizontal stopped. 1 = horizontal moving
+static int v = 0; //0 = vertical stopped. 1 = horizontal moving
+static int motorLocationX = 0; //temp variable for current motor x position
+static int motorLocationY = 0; //temp variable for current motor y position
+static uint8_t steppingx = 0;
+static uint8_t steppingy = 0;
+static int readyx = 0;
+static int readyy = 0;
+static int homeX = 0;
+static int homeY = 0;
+
+const int BufferSize = 128;
+static uint8_t USART2_Buffer_Rx[BufferSize];
+static uint8_t USART2_Buffer_Tx[BufferSize];
+static uint32_t Rx2_Counter = 0;
+volatile uint32_t Tx2_Counter = 0;
 
 
-static int debounce_wait;
-static int ticks;
-static int seconds;
-static int minutes;
-const char NumberChars[10] = {
-        /* 0      1      2      3      4      5      6      7      8      9  */
-        '0','1','2','3','4','5','6','7','8','9'
-};
 
-int row[4] = {10,11,12,13}; //creates an array we will use to put the correct bit in the odr
-const char col_char[4][4] = {{'1','2','3','A'},{'4','5','6','B'},{'7','8','9','C'},{'*','0','%','D'}}; //set up a 2d array with all of the keypad values
-int counter = 60; //sets up our counter variable
-int state = 0; //variable to keep track of the state we are in
-int motorTarget = 0; //variable to keep track of our motor target
-const uint32_t motorFast = 4016; //Predefined value to feed into our systick reload register to get our motor to move fast
-const uint32_t motorSlow = 623530; //Predefined value to feed into our systick reload register to get our motor to move slow
-const uint8_t motorHalfSteps[] =  {0x40, 0x80, 0x4, 0x8};//{0x40, 0xc0, 0x80, 0x84, 0x4, 0xc, 0x8, 0x48}; //setting the correct bits to 1 for a motor half step
-const int motorMask = 0xcc;
-int direction = 0; //0 = stop, 1 = CW, -1 = CCW
-int motorLocation = 0; //temp variable for current motor location
-int digits = 0;
-int speed = 1;
 
+//Initalize the UART
+void USART_Init(USART_TypeDef * USARTx){
+	
+	USARTx->CR1 &= ~USART_CR1_UE; //Disable the UART
+	
+	USARTx->CR1 &= ~USART_CR1_M; //Set data length to 8 bits
+	
+	USARTx->CR2 &= ~USART_CR2_STOP; //Select 1 stop bit
+	
+	USARTx->CR1 &= ~USART_CR1_PCE; //Set no parity
+	
+	USARTx->CR1 &= ~USART_CR1_OVER8;  //Set oversampling by 16
+	
+	USARTx->BRR = 0x683; //Set BAUD rate
+	
+	USARTx->CR1 |= (USART_CR1_TE | USART_CR1_RE); // Enable transmission and reception
+	
+	USARTx->CR1 |= USART_CR1_UE; //Enable USART
+	
+	while ((USARTx->ISR & USART_ISR_TEACK) == 0); //Verify that usart is ready fro transmission
+	
+	while ((USARTx->ISR & USART_ISR_REACK) == 0); //Verify that usart is ready for reception.
+	
+}
+
+//Initiialize the required pins
+void pininit(){
+
+	//2 pins for home switches . input mode pull down resistor then logic low when switch is closed. e10 e11
+	
+	//Setting up the motor step and direction pins for both the horizontal and vertical motors
+
+	GPIOB->MODER &= ~( GPIO_MODER_MODE2_1 | GPIO_MODER_MODE3_1 | GPIO_MODER_MODE6_1 | GPIO_MODER_MODE7_1); //Setting the GPIOB mode registers to input mode for pins 2,3,6,7
+
+	GPIOB->MODER |= ( GPIO_MODER_MODE2_0 | GPIO_MODER_MODE3_0 | GPIO_MODER_MODE6_0 | GPIO_MODER_MODE7_0); //Seeting the GPIOB mode registers to output mode for pins 2,3,6,7 by orring a 1 into the 0 bit of the mode
+
+	GPIOB->OTYPER &= ~(GPIO_OTYPER_OT2 | GPIO_OTYPER_OT3 | GPIO_OTYPER_OT6 | GPIO_OTYPER_OT7); //Seeting the GPIOB output type registers to push pull for pins 2,3,6,7
+
+	//setting up the input pins for the home switchs
+
+	GPIOE->MODER &= ~(GPIO_MODER_MODE10 | GPIO_MODER_MODE11); //Set GPIOE pins 10,11 to input mode
+
+	GPIOE->PUPDR &= ~(GPIO_PUPDR_PUPDR10 | GPIO_PUPDR_PUPDR11); //Set GPIOE pins 10,11 to pull up
+
+	GPIOE->PUPDR |= (GPIO_PUPDR_PUPDR10_0 | GPIO_PUPDR_PUPDR11_0);
+
+	//Setting up the pin for the center button to start and pause the laser
+
+	GPIOA->MODER &= ~(GPIO_MODER_MODE0); //Set GPIOA pin 0 to input mode
+
+	GPIOA->PUPDR &= ~(GPIO_PUPDR_PUPDR0); //Set GPIOA pin 0 to pull down
+
+	GPIOA->PUPDR |= (GPIO_PUPDR_PUPDR0_1); //Set GPIOA pin 0 to pull down
+	
+	//Setting up the PWM and TIM1 pins
+
+	GPIOE->MODER &= ~(GPIO_MODER_MODE8); //Seeting the GPIO mode register to alternate function mode for pin 8
+
+	GPIOE->MODER |= (GPIO_MODER_MODE8_1); //Setting the GPIOE mode register to alternate function mode for pin 8
+
+	GPIOE->AFR[1] &= ~(0xF); //Selecting AF mode 1
+
+	GPIOE->AFR[1] |= 0x1; //Selecting AF mode 1
+
+	GPIOE->OSPEEDR &= ~(GPIO_OSPEEDER_OSPEEDR8); //Seeting output speed 
+
+	GPIOE->PUPDR &= ~(GPIO_PUPDR_PUPD8); //Selecting no pull up or pull down
+	
+	//Setting up the UART2 pins
+	GPIOD->MODER &= ~(GPIO_MODER_MODE5 | GPIO_MODER_MODE6); //Clear mode bits
+	GPIOD->MODER |= (GPIO_MODER_MODE5_1 | GPIO_MODER_MODE6_1);	//Set pins PD5 and PD6 to AFmode
+	
+	GPIOD->AFR[0] |= 0x77 << (4*5); //Set pins 5 and 6 to AF7
+	
+	GPIOD->OSPEEDR |= 0xF << (2*5); // Set GPIO to high speed
+	
+	GPIOD->PUPDR &= ~(0xF << (2*5));
+	GPIOD->PUPDR |= (0x5 << (2*5)); //Select pull-up
+	
+	GPIOD->OTYPER &= ~(0x3 << 5); //Set to push pull mode
+	
+	RCC->APB1ENR1 |= RCC_APB1ENR1_USART2EN; //Enable UART 2 Clock
+	
+	RCC->CCIPR &= ~(RCC_CCIPR_USART2SEL);
+	RCC->CCIPR |= (RCC_CCIPR_USART2SEL_0);//Select system clock as usart clock source
+	
+	USART2->CR1 |= USART_CR1_RXNEIE; // Recieve register not empty interupt
+	USART2->CR1 &= ~(USART_CR1_TXEIE); //Transmit register empty interrupt
+	
+}
+
+//Initiialize timer 1 and pwm
+void timer1init(){
+
+	RCC->APB2ENR |= RCC_APB2ENR_TIM1EN; // Enable the timer 1 clock
+	TIM1->CR1 &= ~TIM_CR1_DIR; //Select up counting
+	TIM1->PSC = 11; // Prescaler of 11 yields 1.3kHz PWM. Smaller PSC -> higher frequency
+	TIM1->ARR = 999; //Set PWM period change this value
+	TIM1->CCMR1 &= ~TIM_CCMR1_OC1M; //Clear output compare mode bits for channel 1
+	TIM1->CCMR1 |= TIM_CCMR1_OC1M; //Select PWM mode 2 oupt on Channel 1
+	TIM1->CCMR1 |= TIM_CCMR1_OC1PE; //Output 1 preload enable
+	TIM1->CCER &= ~TIM_CCER_CC1NP; //Select output polarity
+	TIM1->CCER |= TIM_CCER_CC1NE; //Enable complemtary output of channel 1 
+	TIM1->BDTR |= TIM_BDTR_MOE; //Main output enable
+	TIM1->CCR1 = 999; //initial duty cycle set to 0
+	TIM1->CR1 |= TIM_CR1_CEN; //Enable TIM1
+
+}
+
+//Initiailize systick
 void SysTick_Initialize(uint32_t ticks)
 {
 	SysTick->CTRL = 0; // disable counter and IRQ
 	SysTick->LOAD = ticks - 1; // set the load register
-
 	//make systick least urgent
 	NVIC_SetPriority(SysTick_IRQn, (1<<__NVIC_PRIO_BITS)-1);
-	
-	
 	SysTick->VAL = 0; // reset counter value
-	
 	SysTick->CTRL |= SysTick_CTRL_CLKSOURCE_Msk; // 1 = processor clock 0=ext clk
 	SysTick->CTRL |= SysTick_CTRL_TICKINT_Msk; // enable systick interrupt
 	SysTick->CTRL |= SysTick_CTRL_ENABLE_Msk; // enable timer
 }
-void wait_short(){ //Our counter for a short wait used for keypad inputs
-	int volatile count = 0x0;
-	
-	
-	while (count < 0x2000){
-		count++;
-	}
-}
-	
 
-void wait_long(){ //Our counter for a long wait used for keypad inputs
-	int volatile count = 0x0;
-	
-	
-	while (count < 0x40000){
-		count++;
-		int volatile j = count;
-	}
-}
-
-void motor_move(uint8_t* s){ //our function that prints the char to the lcd if a button is pressed
-	
-	
-
+//Function to move the vertical motor and interface the laser
+void moveVertical(uint8_t distance, uint8_t directiontemp, uint8_t speed, uint8_t power){ //our function that prints the char to the lcd if a button is pressed
+		//Determines direction for motor target purposes	
+		int direction;
+		if (directiontemp == 0){
+			direction = -1;
+		}
+		else{
+			direction = 1;
+		}
+		SysTick_Initialize(motorSpeed / speed); // set the systick speed
+		motorTargetY = motorLocationY + (direction * distance); //finds the correct motor target location
+		directionY = directiontemp; //sets the direction
 		
-	
-	//Checks if the pound key gets pressed
-	
-		SysTick_Initialize(motorSlow); // reload value for fast wind up
-		motorTarget = (counter % 60) * 69; //gets the correct final motor location
-		direction = 1; //sets the direction to clock wise
+		//Variably adjusts the pwm to adjust the laser power
+		if (power == 0){
+			TIM1->CCR1 = 999;
+		}
+		else{
+			TIM1->CCR1 = 1001 - (power * 100);
+		}
+		//sets the vertical moving variable to active
+		v = 1;
 		SysTick->CTRL |= SysTick_CTRL_ENABLE_Msk; //enables the systick timer
 	
 	
 }
 
+//Function to move the vertical motor and interfae the laser
+void moveHorizontal(uint8_t distance, uint8_t directiontemp, uint8_t speed, uint8_t power){ //our function that prints the char to the lcd if a button is pressed
+		//Determines direction for motor target purposes
+		int direction;
+		if (directiontemp == 0){
+			direction = -1;
+		}
+		else{
+			direction = 1;
+		}
+		SysTick_Initialize(motorSpeed / speed); // reload value for fast wind up
+		motorTargetX = motorLocationX + (direction * distance); //gets the correct motor target location
+		directionX = directiontemp; //sets the direction
+		//Variably changes the pwm to adjust the laser power
+		if (power == 0){
+			TIM1->CCR1 = 990;
+		}
+		else{
+			TIM1->CCR1 = 1001 - (power * 100);
+		}
+		//sets the horizontal moving variable to active
+		h = 1;
+		SysTick->CTRL |= SysTick_CTRL_ENABLE_Msk; //enables the systick timer
 	
-void SysTick_Handler(void)
-{
-	//LCD_DisplayString((uint8_t*)"Tick");
-		if(debounce_wait > 0) debounce_wait--; // debounce
-		else debounce_wait = 0;
-	  //if(GPIOA->ODR & 0x1)
-	  //GPIOA->ODR &= ~0x1;
-		//else
-			//GPIOA->ODR |= 0x1;
 	
-		//if(direction != 0){
-		motorLocation += direction;
-		uint8_t motorTemp = motorHalfSteps[motorLocation%4];
-		GPIOB->ODR &= ~motorMask;
-		GPIOB->ODR |= (motorMask & motorTemp);
-			  	
-		//}
-		
-		
 }
 
+//Function to send the laser to a certain point
+void goTo(uint32_t posX, uint32_t posY){
+	motorTargetX = posX;
+	motorTargetY = posY;
+	if (motorTargetX > motorLocationX)
+		directionX = 0; // move away from zero
+	else
+		directionX = 1; // move towards zero
+	if (motorTargetY > motorLocationY)
+		directionY = 0; // move away from zero
+	else
+		directionY = 1; // move towards zero
+	state = moving;
+	
+	while (state == moving); // wait until move is done
+}
+
+void setPower(uint32_t powerLevel)
+{
+	// the power level is on a scale of 1 to 999
+	TIM1->CCR1 = 999-powerLevel;
+}
+
+void home()
+{
+	motorLocationX = 0;
+	motorLocationY = 0;
+	homeX = 0;
+	homeY = 0;
+	goTo(300,300);
+	state = homing;
+	while (state == homing); // wait until we are done
+}
+
+//Test function to engrave a square at 50% power and medium speed
+void sq(uint32_t sideLength){
+	uint32_t beginX = motorLocationX;
+	uint32_t beginY = motorLocationY;
+  goTo(sideLength + beginX, beginY); // TODO change these to burn moves
+	goTo(sideLength + beginX, sideLength + beginY);
+	goTo(beginX, sideLength + beginY);
+	goTo(beginX, beginY);
+}
+	
+//Systick handler. Used for moving the motors. Still needs a lot of work
+void SysTick_Handler(void)
+{
+	if (state == moving)
+	{
+		if (motorLocationX != motorTargetX)// update the x motor stuff
+		{
+		  uint32_t motorTempX = ((directionX << 3) | (xMotorStage << 2));//Gpiob pin 2 controls the stepping of the motor and pin 3 controls direction
+			GPIOB->ODR &= ~motorMaskX;
+			GPIOB->ODR |= motorTempX;
+			if (xMotorStage == falling) // we update the location on falling edge
+			{
+				if (directionX == 1) // update the motor location since we moved
+				{
+					motorLocationX--;
+				}
+				else
+				{
+					motorLocationX++;
+				}
+				xMotorStage = rising;
+			}
+			else
+			{
+				xMotorStage = falling;
+			}
+			
+			
+		}
+		if (motorLocationY != motorTargetY) // update the y motor stuff
+		{
+		  uint32_t motorTempY = ((directionY << 7) | (yMotorStage << 6));//Gpiob pin 6 controls the stepping of the motor and pin 7 controls direction
+			GPIOB->ODR &= ~motorMaskY;
+			GPIOB->ODR |= motorTempY;
+			if (yMotorStage == falling) // we update the location on falling edge
+			{
+				if (directionY == 1) // update the motor location since we moved
+				{
+					motorLocationY--;
+				}
+				else
+				{
+					motorLocationY++;
+				}
+				yMotorStage = rising;
+			}
+			else
+			{
+				yMotorStage = falling;
+			}
+		}
+		
+		if (motorLocationX == motorTargetX && motorLocationY == motorTargetY)
+		{
+			state = idling; // change state if we are done moving.
+		}
+	}
+	if (state == homing)
+	{
+		if (homeX == 0) homeX = (~GPIOE->IDR & (0x1 << 10));
+		if (homeY == 0) homeY = (~GPIOE->IDR & (0x1 << 11));
+		if (homeX == 0)
+		{
+			directionX = 1;
+			uint32_t motorTempX = ((directionX << 3) | (xMotorStage << 2));//Gpiob pin 2 controls the stepping of the motor and pin 3 controls direction
+			GPIOB->ODR &= ~motorMaskX;
+			GPIOB->ODR |= motorTempX;
+
+			if (xMotorStage == rising) // toggle motor stage
+				xMotorStage = falling;
+			else
+				xMotorStage = rising;
+		}
+		else
+		{ // hold still
+			xMotorStage = falling;
+			uint8_t motorTempX = xMotorStage << 2; // direction is zero and pin 2 for stepping
+			GPIOB->ODR &= ~motorMaskX;
+			GPIOB->ODR &= motorTempX;
+		}
+		
+		if (homeY == 0)
+		{
+			directionY = 1;
+			uint32_t motorTempY = ((directionY << 7) | (yMotorStage << 6));//Gpiob pin 6 controls the stepping of the motor and pin 7 controls direction
+			GPIOB->ODR &= ~motorMaskY;
+			GPIOB->ODR |= motorTempY;
+			if (yMotorStage == rising) // toggle motor stage
+				yMotorStage = falling;
+			else
+				yMotorStage = rising;
+		}
+		else
+		{ // hold still
+			yMotorStage = falling;
+			uint8_t motorTempY = yMotorStage << 6; // direction is zero and pin 2 for stepping
+			GPIOB->ODR &= ~motorMaskY;
+			GPIOB->ODR &= motorTempY;
+		}
+		
+		if (homeX != 0 && homeY != 0) // both switches have hit
+		{
+			motorLocationX = 0; // set current location to zero, zero
+			motorLocationY = 0;
+			state = idling; // change state
+		}
+	}
+}
+
+//UART handler. Still needs recieve and send functions. A lot of work needed on this bad boy too
+void USART2_IRQHandler(void){
+	
+		//receive(USART2);
+
+	
+		
+		//send(USART2);
+
+}
+
+//Initializes the last necessary things and lets the program run
 int main(void){
 	
 	// Switch system clock to HSI
-  RCC->CR |= RCC_CR_HSION;  // set clock control reg to use HSI clock
-  while ((RCC->CR & RCC_CR_HSIRDY) == 0); // wait until HSI clock is ready
-	
-//	int was_pressed = 0;
+	RCC->CR |= RCC_CR_HSION;  // set clock control reg to use HSI clock
+	while ((RCC->CR & RCC_CR_HSIRDY) == 0); // wait until HSI clock is ready
+	RCC->CFGR &= ~(RCC_CFGR_SW); //Selecet HSI as system clock source
+	RCC->CFGR |= RCC_CFGR_SW_HSI; //Select HSI as system clock source
+	while ((RCC->CFGR & RCC_CFGR_SWS) == 0); //Wait until HSI is used as system clock source
 
-//	
-//	
-	RCC->AHB2ENR |= RCC_AHB2ENR_GPIOBEN;// enable clocks on GPIO A,B,E 
-//	//    (RCC_AHB2ENR_GPIOAEN |
-//     RCC_AHB2ENR_GPIOEEN |
-//	
-//	
-//	GPIOA->MODER &= ~( GPIO_MODER_MODE1_1 | 
-//		GPIO_MODER_MODE2_1 |
-//		GPIO_MODER_MODE3_1 |
-//		GPIO_MODER_MODE5_1); //Setting the GPIOA mode registers to input mode for pins 1,2,3,5
-//		
-//	GPIOA->MODER &= ~( GPIO_MODER_MODE1_0 | 
-//		GPIO_MODER_MODE2_0 |
-//		GPIO_MODER_MODE3_0 |
-//		GPIO_MODER_MODE5_0); //Setting the GPIOA mode registers to input mode for pins 1,2,3,5
-//	
-//	
-//	GPIOA->MODER &= ~( GPIO_MODER_MODE0_1); //setting buzzer pin to output
-//	GPIOA->MODER |= ( GPIO_MODER_MODE0_0);  //setting buzzer pin to output
-//	GPIOA->OTYPER &= ~(GPIO_OTYPER_OT0); //setting buzzer pin to push pull
-//	
-//	GPIOE->MODER &= ~( GPIO_MODER_MODE10_1 | 
-//		GPIO_MODER_MODE11_1 |
-//		GPIO_MODER_MODE12_1 |
-//		GPIO_MODER_MODE13_1); //Setting the GPIOE mode registers to 0 for pins 10,11,12,13
-//	
-//	
-//	GPIOE->MODER |= ( GPIO_MODER_MODE10_0 | 
-//		GPIO_MODER_MODE11_0 |
-//		GPIO_MODER_MODE12_0 |
-//		GPIO_MODER_MODE13_0);	//Seeting the GPIOE mode registers to output mode for pins 10,11,12,13 by orring a 1 into the 0 bit of the mode
-//		
-//		
-//		GPIOE->OTYPER |= (GPIO_OTYPER_OT10 |
-//			GPIO_OTYPER_OT11 |
-//			GPIO_OTYPER_OT12 |
-//			GPIO_OTYPER_OT13); //Seeting the GPIOE output type registers to open drain mode for pins 10,11,12,13
-//			
-//			
-	 GPIOB->MODER &= ~( GPIO_MODER_MODE2_1 | 
-	 GPIO_MODER_MODE3_1 |
-	 GPIO_MODER_MODE6_1 |
-		GPIO_MODER_MODE7_1);
- //Setting the GPIOB mode registers to input mode for pins 2,3,6,7
+	RCC->AHB2ENR |= (RCC_AHB2ENR_GPIOAEN | RCC_AHB2ENR_GPIOBEN | RCC_AHB2ENR_GPIODEN | RCC_AHB2ENR_GPIOEEN); //Enable clocks for GPIOA, GPIOB, GPIOD, and GPIOE
 	
-		GPIOB->MODER |= ( GPIO_MODER_MODE2_0 | 
-		GPIO_MODER_MODE3_0 | 
-		GPIO_MODER_MODE6_0 | 
-		GPIO_MODER_MODE7_0);
-//Seeting the GPIOB mode registers to output mode for pins 2,3,6,7 by orring a 1 into the 0 bit of the mode
-		
-		
-		GPIOB->OTYPER &= ~(GPIO_OTYPER_OT2 |
-		GPIO_OTYPER_OT3 |
-		GPIO_OTYPER_OT6 |
-			GPIO_OTYPER_OT7);
-//Seeting the GPIOB output type registers to push pull for pins 2,3,6,7
+	pininit(); //Initiialize the pins
+	timer1init(); //Initialize tim1
+	SysTick_Initialize(20080); // reload value for 1ms->40160
 	
-	motor_move(speed);
-	
-	
+
+	NVIC_SetPriority(USART2_IRQn, 0); //Set the highest urgency
+	NVIC_EnableIRQ(USART2_IRQn); //Enable NVIC interrupt
+	NVIC_EnableIRQ(EXTI0_IRQn); //Enable the center button interupt
+	RCC->APB2ENR |= RCC_APB2ENR_SYSCFGEN; 
+	SYSCFG->EXTICR[0] &= ~(SYSCFG_EXTICR1_EXTI0); //Set interupts to port A
+	SYSCFG->EXTICR[0] |= (SYSCFG_EXTICR1_EXTI0_PA);//Set interupts to port A
+
+	EXTI->RTSR1 |= EXTI_RTSR1_RT0; //eanble rising edge trigger
+	EXTI->IMR1 |= EXTI_IMR1_IM0; //disable masks
+
+	USART_Init(USART2); //Initialize the UART
+
+	home(); //reset the laser position
+	setPower(500);
+
+  sq(1000);
+  //goTo(5000, 0);
+	//goTo(5000, 5000);
+	//goTo(0, 5000);
+	//goTo(0,0);
+	setPower(10);
 	while(1);
 
 
