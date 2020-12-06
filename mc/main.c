@@ -61,32 +61,36 @@
 // PA3  = OPAMP1_VOUT (Joy Up)        PB0 = OPAMP2_VOUT (LCD SEG21)
 //
 //****************************************************************************************************************
-
-int state = 0; //variable to keep track of the state we are in
-int motorTargetX = 0; //variable to keep track of our motor target
-int motorTargetY = 0; //variable to keep track of our motor target
-const uint32_t motorSpeed = 62353; //Predefined value to feed into our systick reload register to get our motor to move slow
+enum State {idling, moving, homing, recving, sending};
+enum MotorStages {rising = 1, falling = 0};
+static enum MotorStages xMotorStage = rising;
+static enum MotorStages yMotorStage = rising;
+volatile enum State state = 0; //variable to keep track of the state we are in
+static int motorTargetX = 0; //variable to keep track of our motor target
+static int motorTargetY = 0; //variable to keep track of our motor target
+static const uint32_t motorSpeed = 62353; //Predefined value to feed into our systick reload register to get our motor to move slow
 // const uint8_t motorHalfStepsX[] =  {0x40, 0x80, 0x4, 0x8};//{0x40, 0xc0, 0x80, 0x84, 0x4, 0xc, 0x8, 0x48}; //setting the correct bits to 1 for a motor half step
 // const uint8_t motorHalfStepsX[] =  {0x40, 0x80, 0x4, 0x8};//{0x40, 0xc0, 0x80, 0x84, 0x4, 0xc, 0x8, 0x48}; //setting the correct bits to 1 for a motor half step
-const int motorMaskH = 0xc;
-const int motorMaskV = 0xcf;
-uint8_t directionX = 0; //0 = CW, 1 = CCW
-uint8_t directiony = 0; //0 = CW, 1 = CCW
-int h = 0 //0 = horizontal stopped. 1 = horizontal moving
-int v = 0; //0 = vertical stopped. 1 = horizontal moving
-int motorLocationX = 0; //temp variable for current motor x position
-int motorLocationY = 0; //temp variable for current motor y position
-uint8_t steppingx = 0;
-uint8_t steppingy = 0;
-int readyx = 0;
-int readyy = 0;
+const uint32_t motorMaskX = 0xc;
+const uint32_t motorMaskY = 0xc0;
+static uint8_t directionX = 0; //0 = CW, 1 = CCW
+static uint8_t directionY = 0; //0 = CW, 1 = CCW
+static int h = 0; //0 = horizontal stopped. 1 = horizontal moving
+static int v = 0; //0 = vertical stopped. 1 = horizontal moving
+static int motorLocationX = 0; //temp variable for current motor x position
+static int motorLocationY = 0; //temp variable for current motor y position
+static uint8_t steppingx = 0;
+static uint8_t steppingy = 0;
+static int readyx = 0;
+static int readyy = 0;
+static int homeX = 0;
+static int homeY = 0;
 
-const uint8_t BufferSize = 128;
-uint8_t USART2_Buffer_Rx[BufferSize];
-uint8_t USART2_Buffer_Tx[BufferSize];
-uint32_t Rx2_Counter = 0;
+const int BufferSize = 128;
+static uint8_t USART2_Buffer_Rx[BufferSize];
+static uint8_t USART2_Buffer_Tx[BufferSize];
+static uint32_t Rx2_Counter = 0;
 volatile uint32_t Tx2_Counter = 0;
-char buffer;
 
 
 
@@ -133,9 +137,9 @@ void pininit(){
 
 	GPIOE->MODER &= ~(GPIO_MODER_MODE10 | GPIO_MODER_MODE11); //Set GPIOE pins 10,11 to input mode
 
-	GPIOE->PUPDR &= ~(GPIO_PUPDR_PUPDR10 | GPIO_PUPDR_PUPDR11); //Set GPIOE pins 10,11 to pull down
+	GPIOE->PUPDR &= ~(GPIO_PUPDR_PUPDR10 | GPIO_PUPDR_PUPDR11); //Set GPIOE pins 10,11 to pull up
 
-	GPIOE->PUPDR |= (GPIO_PUPDR_PUPDR10_1 | GPIO_PUPDR_PUPDR11_1);
+	GPIOE->PUPDR |= (GPIO_PUPDR_PUPDR10_0 | GPIO_PUPDR_PUPDR11_0);
 
 	//Setting up the pin for the center button to start and pause the laser
 
@@ -187,7 +191,7 @@ void timer1init(){
 
 	RCC->APB2ENR |= RCC_APB2ENR_TIM1EN; // Enable the timer 1 clock
 	TIM1->CR1 &= ~TIM_CR1_DIR; //Select up counting
-	TIM1->PSC = 15; //change this value for whatever we need
+	TIM1->PSC = 11; // Prescaler of 11 yields 1.3kHz PWM. Smaller PSC -> higher frequency
 	TIM1->ARR = 999; //Set PWM period change this value
 	TIM1->CCMR1 &= ~TIM_CCMR1_OC1M; //Clear output compare mode bits for channel 1
 	TIM1->CCMR1 |= TIM_CCMR1_OC1M; //Select PWM mode 2 oupt on Channel 1
@@ -269,150 +273,166 @@ void moveHorizontal(uint8_t distance, uint8_t directiontemp, uint8_t speed, uint
 }
 
 //Function to send the laser to a certain point
-void goTo(uint8_t posx, uint8_t posy){
-	//Calculates the distance from our current position
-	int tempx = motorLocationX - posx;
-	int tempy = motorLocationY - posy;
-	//Checks to see if moving forward or backward on the horizontal plane
-	if (tempx < 0){
-		directionX = 1;
-		tempx *= -1;
-	}
-	else{
-		directionX = 0;
-	}
-	//moves the horizontal motor to the correct location
-	moveHorizontal(tempx, directionX, 3, 0);
-	//Checks to see if moving forward or backward on the vertical plane
-	if (tempy < 0){
-		direction = 1;
-		tempy *= -1;
-	}
-	else{
-		direction = 0;
-	}
-	//moves the vertical motor to the correct location
-	moveVertical(tempx, directionY, 3, 0);
-
+void goTo(uint32_t posX, uint32_t posY){
+	motorTargetX = posX;
+	motorTargetY = posY;
+	if (motorTargetX > motorLocationX)
+		directionX = 0; // move away from zero
+	else
+		directionX = 1; // move towards zero
+	if (motorTargetY > motorLocationY)
+		directionY = 0; // move away from zero
+	else
+		directionY = 1; // move towards zero
+	state = moving;
+	
+	while (state == moving); // wait until move is done
 }
 
-//Function to reset the value of the laser back to 0,0
-void home(void){
-	
-	//reset the y value
-	while (!(GPIOE->IDR & 0x800)){ 
-		goTo(motorLocationX, motorLocationY - 1);
-	}
-	//reset the x value
-	while (!(GPIOE->IDR & 0x400)){ 
-		goTo(motorLocationX - 1, motorLocationY);
-	}
+void setPower(uint32_t powerLevel)
+{
+	// the power level is on a scale of 1 to 999
+	TIM1->CCR1 = 999-powerLevel;
+}
 
+void home()
+{
 	motorLocationX = 0;
 	motorLocationY = 0;
-
+	homeX = 0;
+	homeY = 0;
+	goTo(300,300);
+	state = homing;
+	while (state == homing); // wait until we are done
 }
 
 //Test function to engrave a square at 50% power and medium speed
-void sq(uint8_t sidelength, uint8_t startx, uint8_t starty){
-	
-	//potential make variables for each corner location
-	goTo(startx, starty);
-
-	moveHorizontal(sidelength, 1, 2, 5);
-	while(motorLocationX != 1);// need a way to tell if it is done moving
-
-	moveVertical(sidelength, 1, 2, 5);
-	while(motorLocationY != 1);
-
-	moveHorizontal(sidelength, 0, 2, 5);
-	while(motorLocationX != 1);
-
-	moveVertical(sidelength, direction, 0, 2, 5);
-	while(motorLocationY != 1);
-
+void sq(uint32_t sideLength){
+	uint32_t beginX = motorLocationX;
+	uint32_t beginY = motorLocationY;
+  goTo(sideLength + beginX, beginY); // TODO change these to burn moves
+	goTo(sideLength + beginX, sideLength + beginY);
+	goTo(beginX, sideLength + beginY);
+	goTo(beginX, beginY);
 }
 	
 //Systick handler. Used for moving the motors. Still needs a lot of work
 void SysTick_Handler(void)
 {
-//if not at destination then step. if at destination for both change state. 
-	if (h){
-		int directiontempx = 0;
-		//creates a temp direction for indexing the motor location
-		if (directionX == 0){
-			directiontempx = -1;
+	if (state == moving)
+	{
+		if (motorLocationX != motorTargetX)// update the x motor stuff
+		{
+		  uint32_t motorTempX = ((directionX << 3) | (xMotorStage << 2));//Gpiob pin 2 controls the stepping of the motor and pin 3 controls direction
+			GPIOB->ODR &= ~motorMaskX;
+			GPIOB->ODR |= motorTempX;
+			if (xMotorStage == falling) // we update the location on falling edge
+			{
+				if (directionX == 1) // update the motor location since we moved
+				{
+					motorLocationX--;
+				}
+				else
+				{
+					motorLocationX++;
+				}
+				xMotorStage = rising;
+			}
+			else
+			{
+				xMotorStage = falling;
+			}
+			
+			
 		}
-		else{
-			directiontempx = 1;
-		}
-		//increments or deincrements the motor location as neccesary
-		motorLocationX += directiontempx;
-		//creates a temp variable to store both our direction and stepping variable
-		uint8_t motorTempx = ((directionX << 3) | (steppingx << 2));//Gpiob pin 2 controls the stepping of the motor and pin 3 controls direction
-
-
-		//Updates the pin as necessary
-		GPIOB->ODR &= ~motorMaskH; //clears pins 2 and 3 on gpiob
-		GPIOB->ODR |= (motorTempx); //sets the direction and stepping pins
-
-		//alternates stepping as neccesary. stepping must input a square wave so it should alternate between 0 and 1
-		if (steppingx){
-			steppingx = 0;
-		}
-		else{
-			steppingx = 1;
+		if (motorLocationY != motorTargetY) // update the y motor stuff
+		{
+		  uint32_t motorTempY = ((directionY << 7) | (yMotorStage << 6));//Gpiob pin 6 controls the stepping of the motor and pin 7 controls direction
+			GPIOB->ODR &= ~motorMaskY;
+			GPIOB->ODR |= motorTempY;
+			if (yMotorStage == falling) // we update the location on falling edge
+			{
+				if (directionY == 1) // update the motor location since we moved
+				{
+					motorLocationY--;
+				}
+				else
+				{
+					motorLocationY++;
+				}
+				yMotorStage = rising;
+			}
+			else
+			{
+				yMotorStage = falling;
+			}
 		}
 		
-		
+		if (motorLocationX == motorTargetX && motorLocationY == motorTargetY)
+		{
+			state = idling; // change state if we are done moving.
+		}
 	}
-	if(v){
-		int directiontempy = 0;
-		//creates a temp direction for indexing the motor location
-		if (directionY == 0){
-			directiontempy = -1;
-		}
-		else{
-			directiontempy = 1;
-		}
-		//increments or deincrements the motor location as neccesary
-		motorLocationY += directiontempy;
-		//creates a temp variable to store both our direction and stepping variable
-		uint8_t motorTempy = ((directionY << 7) | (steppingy << 6)); //Gpiob pin 6 controls the stepping of the motor and pin 7 controls direction
+	if (state == homing)
+	{
+		if (homeX == 0) homeX = (~GPIOE->IDR & (0x1 << 10));
+		if (homeY == 0) homeY = (~GPIOE->IDR & (0x1 << 11));
+		if (homeX == 0)
+		{
+			directionX = 1;
+			uint32_t motorTempX = ((directionX << 3) | (xMotorStage << 2));//Gpiob pin 2 controls the stepping of the motor and pin 3 controls direction
+			GPIOB->ODR &= ~motorMaskX;
+			GPIOB->ODR |= motorTempX;
 
-		//Updates the pin as necessary
-		GPIOB->ODR &= ~motorMaskV; //clears pins 2 and 3 on gpiob
-		GPIOB->ODR |= (motorTempy); //sets the direction and stepping pins
-
-		//alternates stepping as neccesary. stepping must input a square wave so it should alternate between 0 and 1
-		if (steppingy){
-			steppingy = 0;
+			if (xMotorStage == rising) // toggle motor stage
+				xMotorStage = falling;
+			else
+				xMotorStage = rising;
 		}
-		else{
-			steppingy = 1;
+		else
+		{ // hold still
+			xMotorStage = falling;
+			uint8_t motorTempX = xMotorStage << 2; // direction is zero and pin 2 for stepping
+			GPIOB->ODR &= ~motorMaskX;
+			GPIOB->ODR &= motorTempX;
 		}
 		
+		if (homeY == 0)
+		{
+			directionY = 1;
+			uint32_t motorTempY = ((directionY << 7) | (yMotorStage << 6));//Gpiob pin 6 controls the stepping of the motor and pin 7 controls direction
+			GPIOB->ODR &= ~motorMaskY;
+			GPIOB->ODR |= motorTempY;
+			if (yMotorStage == rising) // toggle motor stage
+				yMotorStage = falling;
+			else
+				yMotorStage = rising;
+		}
+		else
+		{ // hold still
+			yMotorStage = falling;
+			uint8_t motorTempY = yMotorStage << 6; // direction is zero and pin 2 for stepping
+			GPIOB->ODR &= ~motorMaskY;
+			GPIOB->ODR &= motorTempY;
+		}
+		
+		if (homeX != 0 && homeY != 0) // both switches have hit
+		{
+			motorLocationX = 0; // set current location to zero, zero
+			motorLocationY = 0;
+			state = idling; // change state
+		}
 	}
-	
-		if(motorLocationX == motorTargetX){
-			h = 0;
-			readyx = 1;
-		}
-		if(motorLocationY == motorTargetY){
-			v = 0;
-			readyy = 1;
-		}
-		
 }
 
 //UART handler. Still needs recieve and send functions. A lot of work needed on this bad boy too
 void USART2_IRQHandler(void){
 	
-		receive(USART2);
+		//receive(USART2);
 
 	
 		
-		send(USART2);
+		//send(USART2);
 
 }
 
@@ -430,6 +450,7 @@ int main(void){
 	
 	pininit(); //Initiialize the pins
 	timer1init(); //Initialize tim1
+	SysTick_Initialize(20080); // reload value for 1ms->40160
 	
 
 	NVIC_SetPriority(USART2_IRQn, 0); //Set the highest urgency
@@ -439,15 +460,20 @@ int main(void){
 	SYSCFG->EXTICR[0] &= ~(SYSCFG_EXTICR1_EXTI0); //Set interupts to port A
 	SYSCFG->EXTICR[0] |= (SYSCFG_EXTICR1_EXTI0_PA);//Set interupts to port A
 
-	EXTI-RTSR1 |= EXTI_RTRS1_RT0; //eanble rising edge trigger
+	EXTI->RTSR1 |= EXTI_RTSR1_RT0; //eanble rising edge trigger
 	EXTI->IMR1 |= EXTI_IMR1_IM0; //disable masks
 
 	USART_Init(USART2); //Initialize the UART
 
 	home(); //reset the laser position
-	
+	setPower(500);
 
-
+  sq(1000);
+  //goTo(5000, 0);
+	//goTo(5000, 5000);
+	//goTo(0, 5000);
+	//goTo(0,0);
+	setPower(10);
 	while(1);
 
 
