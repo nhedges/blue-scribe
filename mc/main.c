@@ -92,6 +92,8 @@ static uint8_t USART2_Buffer_Tx[BufferSize];
 static uint32_t Rx2_Counter = 0;
 volatile uint32_t Tx2_Counter = 0;
 
+int buffer;
+
 
 
 
@@ -424,15 +426,45 @@ void SysTick_Handler(void)
 		}
 	}
 }
+void send(){
+	
+
+	
+	while (!(USART2->ISR & USART_ISR_TXE)); //Check RXNE event
+
+	
+	
+	
+	USART2->TDR = buffer;
+
+
+
+	
+	while (!(USART2->ISR & USART_ISR_TC));
+	USART2->ICR |= USART_ICR_TCCF;
+
+	
+}
+
+void receive(){
+	
+	while (!(USART2->ISR & USART_ISR_RXNE));	//Check RXNE event
+			buffer = USART2->RDR; //Reading RDR clears the RXNE flag
+			GPIOB-> ODR &= ~GPIO_ODR_OD2;
+	
+
+
+
+}
 
 //UART handler. Still needs recieve and send functions. A lot of work needed on this bad boy too
 void USART2_IRQHandler(void){
 	
-		//receive(USART2);
+		receive();
 
 	
 		
-		//send(USART2);
+		send();
 
 }
 
@@ -465,15 +497,15 @@ int main(void){
 
 	USART_Init(USART2); //Initialize the UART
 
-	home(); //reset the laser position
-	setPower(500);
+	//home(); //reset the laser position
+	//setPower(500);
 
-  sq(1000);
+  //sq(1000);
   //goTo(5000, 0);
 	//goTo(5000, 5000);
 	//goTo(0, 5000);
 	//goTo(0,0);
-	setPower(10);
+	//setPower(10);
 	while(1);
 
 
