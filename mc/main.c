@@ -89,10 +89,12 @@ static int homeY = 0;
 const int BufferSize = 128;
 static uint8_t USART2_Buffer_Rx[BufferSize];
 static uint8_t USART2_Buffer_Tx[BufferSize];
-static uint32_t Rx2_Counter = 0;
+uint32_t Rx2_Counter = 0;
 volatile uint32_t Tx2_Counter = 0;
 
-int buffer;
+int buffer[BufferSize];
+int receiving = 1;
+int cansend = 0;
 
 
 
@@ -427,33 +429,41 @@ void SysTick_Handler(void)
 	}
 }
 void send(){
-	
-
-	
+		
 	while (!(USART2->ISR & USART_ISR_TXE)); //Check RXNE event
-
 	
+	if (cansend){
 	
-	
-	USART2->TDR = buffer;
+			USART2->TDR = buffer[Rx2_Counter-1];
+		
+			cansend = 0;
+			receiving = 1;
+			Rx2_Counter = 0;
+			while (!(USART2->ISR & USART_ISR_TC));
+			USART2->ICR |= USART_ICR_TCCF;
+		
 
 
-
+	}
 	
-	while (!(USART2->ISR & USART_ISR_TC));
-	USART2->ICR |= USART_ICR_TCCF;
+
 
 	
 }
 
 void receive(){
 	
-	while (!(USART2->ISR & USART_ISR_RXNE));	//Check RXNE event
-			buffer = USART2->RDR; //Reading RDR clears the RXNE flag
-			GPIOB-> ODR &= ~GPIO_ODR_OD2;
-	
+	if (Rx2_Counter < BufferSize && receiving){
+		while (!(USART2->ISR & USART_ISR_RXNE));	//Check RXNE event
+		buffer[Rx2_Counter] = USART2->RDR; //Reading RDR clears the RXNE flag
+		Rx2_Counter++;
+		
+		if (buffer[Rx2_Counter] == 10 || Rx2_Counter >= BufferSize){
+			receiving = 0;
+			cansend = 1;
+		}
 
-
+	}
 
 }
 
