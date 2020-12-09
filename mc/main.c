@@ -87,14 +87,11 @@ static int homeX = 0;
 static int homeY = 0;
 
 const int BufferSize = 128;
-static uint8_t USART2_Buffer_Rx[BufferSize];
-static uint8_t USART2_Buffer_Tx[BufferSize];
 uint32_t Rx2_Counter = 0;
-volatile uint32_t Tx2_Counter = 0;
+char buffer[BufferSize];
+char doneflag[3] = "A\n";
+char errorflag[7] = "Error\n";
 
-int buffer[BufferSize];
-int receiving = 1;
-int cansend = 0;
 
 
 
@@ -221,63 +218,46 @@ void SysTick_Initialize(uint32_t ticks)
 	SysTick->CTRL |= SysTick_CTRL_ENABLE_Msk; // enable timer
 }
 
-//Function to move the vertical motor and interface the laser
-void moveVertical(uint8_t distance, uint8_t directiontemp, uint8_t speed, uint8_t power){ //our function that prints the char to the lcd if a button is pressed
-		//Determines direction for motor target purposes	
-		int direction;
-		if (directiontemp == 0){
-			direction = -1;
-		}
-		else{
-			direction = 1;
-		}
-		SysTick_Initialize(motorSpeed / speed); // set the systick speed
-		motorTargetY = motorLocationY + (direction * distance); //finds the correct motor target location
-		directionY = directiontemp; //sets the direction
-		
-		//Variably adjusts the pwm to adjust the laser power
-		if (power == 0){
-			TIM1->CCR1 = 999;
-		}
-		else{
-			TIM1->CCR1 = 1001 - (power * 100);
-		}
-		//sets the vertical moving variable to active
-		v = 1;
-		SysTick->CTRL |= SysTick_CTRL_ENABLE_Msk; //enables the systick timer
-	
-	
-}
+void send(int message) {
 
-//Function to move the vertical motor and interfae the laser
-void moveHorizontal(uint8_t distance, uint8_t directiontemp, uint8_t speed, uint8_t power){ //our function that prints the char to the lcd if a button is pressed
-		//Determines direction for motor target purposes
-		int direction;
-		if (directiontemp == 0){
-			direction = -1;
+	while (!(USART2->ISR & USART_ISR_TXE)); //Check RXNE event
+
+	if (state == sending) {
+
+		if (message == 1) {
+			//send done flag
+			for (int i = 0; i < 2; i++) {
+				while (!(USART2->ISR & USART_ISR_TXE));
+				USART2->TDR = doneflag[i];//send our done flag A\n
+			}
+			
 		}
-		else{
-			direction = 1;
+		else if (message == 2) {
+			for (int i = 0; i < 6; i++) {
+				while (!(USART2->ISR & USART_ISR_TXE));
+				USART2->TDR = errorflag[i];//send our done flag A\n
+			}
+
 		}
-		SysTick_Initialize(motorSpeed / speed); // reload value for fast wind up
-		motorTargetX = motorLocationX + (direction * distance); //gets the correct motor target location
-		directionX = directiontemp; //sets the direction
-		//Variably changes the pwm to adjust the laser power
-		if (power == 0){
-			TIM1->CCR1 = 990;
+		
+		Rx2_Counter = 0;
+		for (int i = 0; i < BufferSize; i++){
+			buffer[i] = 0;
 		}
-		else{
-			TIM1->CCR1 = 1001 - (power * 100);
-		}
-		//sets the horizontal moving variable to active
-		h = 1;
-		SysTick->CTRL |= SysTick_CTRL_ENABLE_Msk; //enables the systick timer
-	
-	
+		while (!(USART2->ISR & USART_ISR_TC));
+		USART2->ICR |= USART_ICR_TCCF;
+
+
+		state = idling;
+	}
+
+
+
+
 }
 
 //Function to send the laser to a certain point
-void goTo(uint32_t posX, uint32_t posY){
+void goTo(int posX, int posY){
 	motorTargetX = posX;
 	motorTargetY = posY;
 	if (motorTargetX > motorLocationX)
@@ -291,9 +271,10 @@ void goTo(uint32_t posX, uint32_t posY){
 	state = moving;
 	
 	while (state == moving); // wait until move is done
+	send(1);
 }
 
-void setPower(uint32_t powerLevel)
+void setPower(int powerLevel)
 {
 	// the power level is on a scale of 1 to 999
 	TIM1->CCR1 = 999-powerLevel;
@@ -308,10 +289,11 @@ void home()
 	goTo(300,300);
 	state = homing;
 	while (state == homing); // wait until we are done
+	send(1);
 }
 
 //Test function to engrave a square at 50% power and medium speed
-void sq(uint32_t sideLength){
+void sq(int sideLength){
 	uint32_t beginX = motorLocationX;
 	uint32_t beginY = motorLocationY;
   goTo(sideLength + beginX, beginY); // TODO change these to burn moves
@@ -323,6 +305,7 @@ void sq(uint32_t sideLength){
 //Systick handler. Used for moving the motors. Still needs a lot of work
 void SysTick_Handler(void)
 {
+	
 	if (state == moving)
 	{
 		if (motorLocationX != motorTargetX)// update the x motor stuff
@@ -374,13 +357,15 @@ void SysTick_Handler(void)
 		
 		if (motorLocationX == motorTargetX && motorLocationY == motorTargetY)
 		{
-			state = idling; // change state if we are done moving.
+			
+			state = sending; // change state if we are done moving.
+			
 		}
 	}
 	if (state == homing)
 	{
-		if (homeX == 0) homeX = (~GPIOE->IDR & (0x1 << 10));
-		if (homeY == 0) homeY = (~GPIOE->IDR & (0x1 << 11));
+		if (homeX == 0) homeX = 1;//(~GPIOE->IDR & (0x1 << 10));
+		if (homeY == 0) homeY = 1;//(~GPIOE->IDR & (0x1 << 11));
 		if (homeX == 0)
 		{
 			directionX = 1;
@@ -424,57 +409,31 @@ void SysTick_Handler(void)
 		{
 			motorLocationX = 0; // set current location to zero, zero
 			motorLocationY = 0;
-			state = idling; // change state
+			state = sending; // change state
 		}
 	}
 }
-void send(){
-		
-	while (!(USART2->ISR & USART_ISR_TXE)); //Check RXNE event
-	
-	if (cansend){
-	
-			USART2->TDR = buffer[Rx2_Counter-1];
-		
-			cansend = 0;
-			receiving = 1;
-			Rx2_Counter = 0;
-			while (!(USART2->ISR & USART_ISR_TC));
-			USART2->ICR |= USART_ICR_TCCF;
-		
 
-
-	}
-	
-
-
-	
-}
 
 void receive(){
 	
-	if (Rx2_Counter < BufferSize && receiving){
+	if (Rx2_Counter < BufferSize && state == idling){
 		while (!(USART2->ISR & USART_ISR_RXNE));	//Check RXNE event
 		buffer[Rx2_Counter] = USART2->RDR; //Reading RDR clears the RXNE flag
-		Rx2_Counter++;
+	
 		
-		if (buffer[Rx2_Counter] == 10 || Rx2_Counter >= BufferSize){
-			receiving = 0;
-			cansend = 1;
+		if (buffer[Rx2_Counter] == 0x0D || Rx2_Counter >= BufferSize){
+			state = recving;
 		}
-
+		Rx2_Counter++;
 	}
-
+		
 }
 
 //UART handler. Still needs recieve and send functions. A lot of work needed on this bad boy too
 void USART2_IRQHandler(void){
 	
 		receive();
-
-	
-		
-		send();
 
 }
 
@@ -507,16 +466,63 @@ int main(void){
 
 	USART_Init(USART2); //Initialize the UART
 
-	//home(); //reset the laser position
+	home(); //reset the laser position
 	//setPower(500);
 
   //sq(1000);
-  //goTo(5000, 0);
+  //goTo(5, 0);
 	//goTo(5000, 5000);
 	//goTo(0, 5000);
 	//goTo(0,0);
 	//setPower(10);
-	while(1);
+	while(1){
+		if (state == recving){
+			volatile char arg1;
+			volatile char arg2;
+
+			volatile int temp1;
+			volatile int temp2;
+			
+			volatile int t = sscanf(buffer, "%c%c %d %d", &arg1, &arg2, &temp1, &temp2);
+
+			if (arg1 == 'G' && arg2 == 'O') {
+				goTo(temp1, temp2);
+			}
+			else if (arg1 == 'H' && arg2 == 'M') {
+				home();
+			}
+			else if (arg1 == 'B' && arg2 == 'V') {
+				setPower(temp2);
+				if ((motorLocationY + temp1) > 0 && (motorLocationY + temp1) < 19000) {
+					goTo(motorLocationX, motorLocationY + temp1);
+				}
+				else {
+					state = sending;
+					send(2);
+				}
+			}
+			else if(arg1 == 'B' && arg2 == 'H') {
+				setPower(temp2);
+				if ((motorLocationX + temp1) > 0 && (motorLocationX + temp1) < 19000) {
+					goTo(motorLocationX + temp1, motorLocationY);
+				}
+				else {
+					state = sending;
+					send(2);
+				}
+				 
+			}
+			else if(arg1 == 'S' && arg2 == 'Q') {
+				setPower(temp2);
+				sq(temp1);
+			}
+			else {
+				state = sending;
+				send(2);
+			}
+					
+		}
+	}
 
 
 }
