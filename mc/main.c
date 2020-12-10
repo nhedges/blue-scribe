@@ -85,8 +85,8 @@ static int homeY = 0; //variable for the home location
 const int BufferSize = 128; //eclares the size of the inputted buffer
 uint32_t Rx2_Counter = 0; //variable used to keep track of buffer location
 char buffer[BufferSize]; //defines the buffer
-char doneflag[3] = "A\r"; //the string we want to return to the uart when an instruction completes succesfully
-char errorflag[7] = "Error\n"; //the strings we want to return to the uart when there is an error
+char doneflag[5] = "A\n\r"; //the string we want to return to the uart when an instruction completes succesfully
+char errorflag[9] = "Error\n\r"; //the strings we want to return to the uart when there is an error
 
 
 
@@ -184,14 +184,14 @@ void send(int message) {
 	if (state == sending) { //check for the sending state
 
 		if (message == 1) { //check for a good instruction completion
-			for (int i = 0; i < 2; i++) {
+			for (int i = 0; i < 4; i++) {
 				while (!(USART2->ISR & USART_ISR_TXE));
 				USART2->TDR = doneflag[i];//send done flag
 			}
 			
 		}
 		else if (message == 2) { //check for an error message
-			for (int i = 0; i < 6; i++) {
+			for (int i = 0; i < 8; i++) {
 				while (!(USART2->ISR & USART_ISR_TXE));
 				USART2->TDR = errorflag[i];//send error flag
 			}
