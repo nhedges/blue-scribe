@@ -331,8 +331,8 @@ void SysTick_Handler(void)
 	
 	if (state == homing)
 	{
-		if (homeX == 0) homeX = 1;//(~GPIOE->IDR & (0x1 << 10));
-		if (homeY == 0) homeY = 1;//(~GPIOE->IDR & (0x1 << 11));
+		if (homeX == 0) homeX = (~GPIOE->IDR & (0x1 << 10));
+		if (homeY == 0) homeY = (~GPIOE->IDR & (0x1 << 11));
 		if (homeX == 0)
 		{
 			directionX = 1;
@@ -455,6 +455,7 @@ int main(void){
 					function = GO;
 					setPower(temp2);
 					goTo(motorLocationX, motorLocationY + temp1);
+					setPower(0);
 				}
 				else { //sends an error on an invalid move
 					state = sending;
@@ -467,6 +468,7 @@ int main(void){
 					function = GO;
 					setPower(temp2);
 					goTo(motorLocationX + temp1, motorLocationY);
+					setPower(0);
 				}
 				else { //sends an error on an invalid move
 					state = sending;
@@ -478,6 +480,7 @@ int main(void){
 				function = SQ;
 				setPower(temp2);
 				sq(temp1);
+				setPower(0);
 			}
 			else { //default case on an unknown input
 				state = sending;
