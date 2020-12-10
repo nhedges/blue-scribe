@@ -85,7 +85,7 @@ static int homeY = 0; //variable for the home location
 const int BufferSize = 128; //eclares the size of the inputted buffer
 uint32_t Rx2_Counter = 0; //variable used to keep track of buffer location
 char buffer[BufferSize]; //defines the buffer
-char doneflag[3] = "A\n"; //the string we want to return to the uart when an instruction completes succesfully
+char doneflag[3] = "A\r"; //the string we want to return to the uart when an instruction completes succesfully
 char errorflag[7] = "Error\n"; //the strings we want to return to the uart when there is an error
 
 
