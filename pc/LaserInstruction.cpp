@@ -6,7 +6,7 @@ LaserInstruction::LaserInstruction(std::function<void(std::string*)> dispCallbac
   m_displayCallback = dispCallback;
 }
 
-LaserInstruction::LaserInstruction(CmdClass commandType, uint32_t arg1, uint32_t arg2, std::function<void(std::string*)> dispCallback):
+LaserInstruction::LaserInstruction(CmdClass commandType, int arg1, int arg2, std::function<void(std::string*)> dispCallback):
   m_displayCallback(dispCallback),
   m_class(commandType),
   m_arg1(arg1),

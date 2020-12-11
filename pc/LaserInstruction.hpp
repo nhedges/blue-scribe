@@ -12,13 +12,13 @@ class LaserInstruction
 {
   public:
     LaserInstruction(std::function<void(std::string*)> dispCallback);
-    LaserInstruction(CmdClass commandType, uint32_t arg1, uint32_t arg2, std::function<void(std::string*)> dispCallback);
+    LaserInstruction(CmdClass commandType, int arg1, int arg2, std::function<void(std::string*)> dispCallback);
     void send();
   protected:
     std::function<void(std::string*)> m_displayCallback;
     CmdClass m_class;
-    uint32_t m_arg1;
-    uint32_t m_arg2;
+    int m_arg1;
+    int m_arg2;
 };
 
 
