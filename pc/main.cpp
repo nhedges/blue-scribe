@@ -7,8 +7,10 @@
 #include <opencv4/opencv2/imgproc/imgproc.hpp>
 #include "serial.hpp"
 
-#define X_MAX 500
-#define Y_MAX 500
+#define X_MAX 380
+#define Y_MAX 380
+#define MOTOR_SCALE 50
+#define LASER_SCALE 2 // max 510/1000 power
 static Serial* pSerial;
 
 void uart_send(std::string* txt)
@@ -16,13 +18,10 @@ void uart_send(std::string* txt)
   std::cout << *txt;
   pSerial->sendLine(*txt);
   std::string input;
-  while(input.compare("AK") != 0)
+  while(input.compare("A\n\r") != 0)
   {
     input = pSerial->getLine();
-    if (input.compare(0,2,"CM") == 0)
-    {
-      std::cout << "Debug: "<< input << std::endl;
-    }
+    std::cout << "Debug: "<< input << std::endl;
   }
 }
 
@@ -59,15 +58,22 @@ int main(int argc, char **argv)
   cv::waitKey(0);
   std::string temp; // wait for input before continuing
   std::cin >> temp;
-  pSerial = new Serial("/dev/ttyUSB0");
+  pSerial = new Serial("/dev/ttyACM0");
 
   std::vector<LaserInstruction> instructions;
   instructions.push_back(LaserInstruction( // start from home
       [&](std::string* txt){ uart_send(txt);}
       ));
-
+  
   for (int r = 0; r < yLimit; r++)
   {
+    int direction = 0;
+    if ((r & 0x1) == 0) //even rows
+      direction = 1;
+    else
+      direction = -1; // odd rows right to left
+    if(direction == 1)
+    { // left to right
     for (int c = 0; c < xLimit; c++)
     {
       auto pixHere = image.at<uchar>(r, c);
@@ -76,8 +82,8 @@ int main(int argc, char **argv)
         instructions.push_back(
           LaserInstruction( // move to this pixel
             GO,
-            r,
-            c,
+            c * MOTOR_SCALE,
+            r * MOTOR_SCALE,
             [&](std::string* txt){ uart_send(txt);}
           )
         );
@@ -94,14 +100,53 @@ int main(int argc, char **argv)
         instructions.push_back(
           LaserInstruction(
             BH,
-            extend,
-            pixHere,
+            (extend+1) * MOTOR_SCALE,
+            pixHere * LASER_SCALE,
             [&](std::string* txt){ uart_send(txt);}
           )
         );
       }
       c += extend;
 
+    }
+    }
+    else
+    {// right to left
+    for (int c = xLimit; c >= 0; c--)
+    {
+      auto pixHere = image.at<uchar>(r, c);
+      if (pixHere != 0)
+      {
+        instructions.push_back(
+          LaserInstruction( // move to this pixel
+            GO,
+            (c+1) * MOTOR_SCALE,
+            r * MOTOR_SCALE,
+            [&](std::string* txt){ uart_send(txt);}
+          )
+        );
+      }
+      uint32_t extend = 0;
+      if (pixHere == image.at<uchar>(r, c-1))
+      {
+        for (int c2 = c-1;
+            (c2 >= 0) && (image.at<uchar>(r,c2) == pixHere);
+            c2--,extend--);
+      }
+      if (pixHere != 0) // we skip blank space
+      {
+        instructions.push_back(
+          LaserInstruction(
+            BH,
+            (extend-1) * MOTOR_SCALE,
+            pixHere * LASER_SCALE,
+            [&](std::string* txt){ uart_send(txt);}
+          )
+        );
+      }
+      c += extend;
+
+    }
     }
 
   }
