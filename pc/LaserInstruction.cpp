@@ -22,6 +22,6 @@ void LaserInstruction::send()
   {
     buf = buf + " " + std::to_string(m_arg1) + " " + std::to_string(m_arg2);
   }
-  buf = buf + "\n";
+  buf = buf + "\n\r";
   m_displayCallback(&buf);
 }
