@@ -25,3 +25,37 @@ void LaserInstruction::send()
   buf = buf + "\n\r";
   m_displayCallback(&buf);
 }
+
+int LaserInstruction::getArg1()
+{
+  return m_arg1;
+}
+
+int LaserInstruction::getArg2()
+{
+  return m_arg2;
+}
+
+CmdClass LaserInstruction::getType()
+{
+  return m_class;
+}
+
+int LaserInstruction::getInternalCost()
+{
+  switch (m_class)
+  {
+    case GO:
+    case HM:
+      return 0;
+      break;
+    case SQ:
+      return 4 * m_arg1;
+      break;
+    case BH:
+    case BV:
+      return m_arg1;
+    default:
+      return 0;
+  }
+}

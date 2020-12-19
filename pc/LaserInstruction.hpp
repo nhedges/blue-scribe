@@ -14,6 +14,10 @@ class LaserInstruction
     LaserInstruction(std::function<void(std::string*)> dispCallback);
     LaserInstruction(CmdClass commandType, int arg1, int arg2, std::function<void(std::string*)> dispCallback);
     void send();
+    int getArg1();
+    int getArg2();
+    CmdClass getType();
+    int getInternalCost();
   protected:
     std::function<void(std::string*)> m_displayCallback;
     CmdClass m_class;
