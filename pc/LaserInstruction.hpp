@@ -18,6 +18,8 @@ class LaserInstruction
     int getArg2();
     CmdClass getType();
     int getInternalCost();
+    int getDeltaX();
+    int getDeltaY();
   protected:
     std::function<void(std::string*)> m_displayCallback;
     CmdClass m_class;

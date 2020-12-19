@@ -50,12 +50,28 @@ int LaserInstruction::getInternalCost()
       return 0;
       break;
     case SQ:
-      return 4 * m_arg1;
+      return 4 * abs(m_arg1);
       break;
     case BH:
     case BV:
-      return m_arg1;
+      return abs(m_arg1);
     default:
       return 0;
   }
+}
+
+int LaserInstruction::getDeltaX()
+{
+  if (m_class == BH)
+    return m_arg1;
+  else
+    return 0;
+}
+
+int LaserInstruction::getDeltaY()
+{
+  if (m_class == BV)
+    return m_arg1;
+  else
+    return 0;
 }

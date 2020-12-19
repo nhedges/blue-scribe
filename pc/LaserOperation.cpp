@@ -28,13 +28,22 @@ int LaserOperation::getStartingYLoc()
 
 int LaserOperation::getEndingXLoc()
 {
-  return -1;//TODO implement
+  int sum = getStartingXLoc();
+  for (int i = 0; i < m_instructions.size(); i++)
+  {
+    sum += m_instructions.at(i)->getDeltaX();
+  }
+  return sum;
 }
-
 
 int LaserOperation::getEndingYLoc()
 {
-  return -1;//TODO implement
+  int sum = getStartingYLoc();
+  for (int i = 0; i < m_instructions.size(); i++)
+  {
+    sum += m_instructions.at(i)->getDeltaY();
+  }
+  return sum;
 }
 
 int LaserOperation::getInternalCost()
