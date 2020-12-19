@@ -47,10 +47,6 @@ int totalCost(std::vector<LaserOperation> imgOps)
   {
     int dx = abs(imgOps[i].getStartingXLoc() - x);
     int dy = abs(imgOps[i].getStartingYLoc() - y);
-    std::cout << "x:" << x << std::endl;
-    std::cout << "startX:" << imgOps[i].getStartingXLoc() << std::endl;
-    std::cout << "endX:" << imgOps[i].getEndingXLoc() << std::endl;
-    std::cout << "dx:" << dx << std::endl;
     x = imgOps[i].getEndingXLoc();
     y = imgOps[i].getEndingYLoc();
     if (dx >= dy)
@@ -62,7 +58,6 @@ int totalCost(std::vector<LaserOperation> imgOps)
       cost += dy;
     }
     cost += imgOps[i].getInternalCost();
-    std::cout << "running cost " << cost << std::endl;
   }
   return cost;
 }
@@ -201,6 +196,7 @@ int main(int argc, char **argv)
       ));
   int tempCost = totalCost(imageOps);
   std::cout << "Generated " << imageOps.size() << " operations, costing " << tempCost << std::endl;
+  std::cout << tempCost/400 << " seconds" << std::endl;
   std::cin >> tempCost;
 
   for (int i = 0; i < imageOps.size(); i++)
