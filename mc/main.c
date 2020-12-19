@@ -21,6 +21,8 @@
 //           Data cache = 8 lines of 4x64 bits (256 B)
 //
 //****************************************************************************************************************
+#define XLIMIT 19000
+#define YLIMIT 19000
 enum State {idling, moving, homing, recving, sending};
 enum Function {GO, HM, SQ, NONE};
 enum MotorStages {rising = 1, falling = 0};
@@ -411,7 +413,7 @@ int main(void){
 			}
 			else if (arg1 == 'B' && arg2 == 'V') { //checks for a burn vertical input
 				
-				if ((motorLocationY + temp1) > 0 && (motorLocationY + temp1) < 19000) { //checks for a valid move
+				if ((motorLocationY + temp1) >= 0 && (motorLocationY + temp1) < YLIMIT) { //checks for a valid move
 					function = GO;
 					setPower(temp2);
 					goTo(motorLocationX, motorLocationY + temp1);
@@ -423,7 +425,7 @@ int main(void){
 			}
 			else if(arg1 == 'B' && arg2 == 'H') { //checks for a burn horizontal input
 				
-				if ((motorLocationX + temp1) > 0 && (motorLocationX + temp1) < 19000) { //checks for a valid move
+				if ((motorLocationX + temp1) >= 0 && (motorLocationX + temp1) < XLIMIT) { //checks for a valid move
 					function = GO;
 					setPower(temp2);
 					goTo(motorLocationX + temp1, motorLocationY);
