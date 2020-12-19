@@ -11,7 +11,7 @@
 // Nicholas Hedges, 2020
 //
 //******************************************************************
-#include "LaserInstruction.hpp"
+#include "LaserOperation.hpp"
 #include <iostream>
 #include <memory>
 #include <vector>
@@ -73,8 +73,9 @@ int main(int argc, char **argv)
   std::cin >> temp;
   pSerial = new Serial("/dev/ttyACM0");
 
-  std::vector<LaserInstruction> instructions;
-  instructions.push_back(LaserInstruction( // start from home
+  std::vector<LaserOperation> imageOps;
+  imageOps.push_back(*(new LaserOperation()));
+  imageOps.back().appendInstruction(new LaserInstruction( // start from home
       [&](std::string* txt){ uart_send(txt);}
       ));
   
@@ -92,8 +93,9 @@ int main(int argc, char **argv)
       auto pixHere = image.at<uchar>(r, c);
       if (pixHere != 0)
       {
-        instructions.push_back(
-          LaserInstruction( // move to this pixel
+        imageOps.push_back(*(new LaserOperation()));
+        imageOps.back().appendInstruction(
+          new LaserInstruction( // move to this pixel
             GO,
             c * MOTOR_SCALE,
             r * MOTOR_SCALE,
@@ -110,8 +112,8 @@ int main(int argc, char **argv)
       }
       if (pixHere != 0) // we skip blank space
       {
-        instructions.push_back(
-          LaserInstruction(
+        imageOps.back().appendInstruction(
+          new LaserInstruction(
             BH,
             (extend+1) * MOTOR_SCALE,
             pixHere * LASER_SCALE,
@@ -130,8 +132,9 @@ int main(int argc, char **argv)
       auto pixHere = image.at<uchar>(r, c);
       if (pixHere != 0)
       {
-        instructions.push_back(
-          LaserInstruction( // move to this pixel
+        imageOps.push_back(*(new LaserOperation()));
+        imageOps.back().appendInstruction(
+          new LaserInstruction( // move to this pixel
             GO,
             (c+1) * MOTOR_SCALE,
             r * MOTOR_SCALE,
@@ -148,8 +151,8 @@ int main(int argc, char **argv)
       }
       if (pixHere != 0) // we skip blank space
       {
-        instructions.push_back(
-          LaserInstruction(
+        imageOps.back().appendInstruction(
+          new LaserInstruction(
             BH,
             (extend-1) * MOTOR_SCALE,
             pixHere * LASER_SCALE,
@@ -163,13 +166,14 @@ int main(int argc, char **argv)
     }
 
   }
-  instructions.push_back(LaserInstruction( // go home at the end
+  imageOps.push_back(*(new LaserOperation()));
+  imageOps.back().appendInstruction(new LaserInstruction( // go home at the end
       [&](std::string* txt){ uart_send(txt);}
       ));
 
-  for (int i = 0; i < instructions.size(); i++)
+  for (int i = 0; i < imageOps.size(); i++)
   {
-    instructions.at(i).send();
+    imageOps.at(i).run();
   }
   
 }

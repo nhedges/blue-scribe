@@ -57,3 +57,11 @@ int LaserOperation::appendInstruction(LaserInstruction* pNewInst)
     m_instructions.push_back(std::shared_ptr<LaserInstruction>(pNewInst));
   return m_instructions.size();
 }
+
+void LaserOperation::run()
+{
+  for (int i = 0; i < m_instructions.size(); i++)
+  {
+    m_instructions.at(i)->send();
+  }
+}
