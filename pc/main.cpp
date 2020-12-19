@@ -38,6 +38,22 @@ void uart_send(std::string* txt)
   }
 }
 
+int effectiveDistance(int x1, int y1, int x2, int y2)
+{
+  int dx = abs(x2-x1);
+  int dy = abs(y2-y1);
+  int cost = 0;
+  if (dx >= dy)
+  {
+    cost += dx;
+  }
+  else
+  {
+    cost += dy;
+  }
+  return cost;
+}
+
 int totalCost(std::vector<LaserOperation> imgOps)
 {
   int x = 0;
@@ -45,21 +61,45 @@ int totalCost(std::vector<LaserOperation> imgOps)
   int cost = 0;
   for (int i = 0; i < imgOps.size(); i++)
   {
-    int dx = abs(imgOps[i].getStartingXLoc() - x);
-    int dy = abs(imgOps[i].getStartingYLoc() - y);
+    cost += effectiveDistance(x, y, imgOps[i].getStartingXLoc(), imgOps[i].getStartingYLoc());
     x = imgOps[i].getEndingXLoc();
     y = imgOps[i].getEndingYLoc();
-    if (dx >= dy)
-    {
-      cost += dx;
-    }
-    else
-    {
-      cost += dy;
-    }
     cost += imgOps[i].getInternalCost();
   }
   return cost;
+}
+
+void shortestPath(std::vector<LaserOperation>* imageOps)
+{
+  // this is the algorithm for trying to optimize the
+  // time required to print out the picture.
+  // the plan to try first
+  //
+  // (first op is always first)
+  //
+  // traverse the op, we have an x,y at the end
+  // search nearby space for ops (or just forwards into the future)
+  // If we find a closer starting point, swap it with the one
+  // we were going to do next
+  // do the op, repeat
+  
+  for( int i = 0; i < imageOps->size() - 1; i++)
+  {
+    int xStart = imageOps->at(i).getEndingXLoc();
+    int yStart = imageOps->at(i).getEndingYLoc(); // find our starting point
+    int nearestIndex = i+1;
+    for (int j = i+2; j < imageOps->size(); j++)
+    {
+      if (effectiveDistance(xStart, yStart, imageOps->at(j).getStartingXLoc(), imageOps->at(j).getStartingYLoc()) > effectiveDistance(xStart, yStart, imageOps->at(nearestIndex).getStartingXLoc(), imageOps->at(nearestIndex).getStartingYLoc()))
+      {
+        nearestIndex = j;
+      }
+    }
+    if (nearestIndex != i+1)
+    {
+      std::swap(imageOps->at(i+1), imageOps->at(nearestIndex));
+    }
+  }
 }
 
 int main(int argc, char **argv)
