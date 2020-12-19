@@ -1,3 +1,16 @@
+//******************************************************************
+//
+// main.cpp
+//
+// This is the main portion of the BlueScribe PC software,
+// which communicates with the STM32 microcontroller over UART.
+//
+// It opens an image file, generates commands for the laser engraver,
+// queues the list, and sends them, waiting for acknowledgement
+// from the microcontroller.
+// Nicholas Hedges, 2020
+//
+//******************************************************************
 #include "LaserInstruction.hpp"
 #include <iostream>
 #include <memory>
