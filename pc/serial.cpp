@@ -1,4 +1,5 @@
 #include "serial.hpp"
+#include <iostream>
 Serial::Serial(std::string path)
 {
   m_serial_port = open(path.c_str(), O_RDWR); // open the serial port file for send and receive
@@ -49,6 +50,8 @@ Serial::Serial(std::string path)
 
 int Serial::sendLine(std::string str)
 {
+  std::cout << str << " length " << str.length() << std::endl;
+  std::cout << "file handle" << std::hex << m_serial_port << std::endl;
   return write(m_serial_port, str.c_str(), str.length());
 }
 

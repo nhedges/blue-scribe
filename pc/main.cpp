@@ -51,6 +51,7 @@ int effectiveDistance(int x1, int y1, int x2, int y2)
   {
     cost += dy;
   }
+  //std::cout << "distance from (" << x1 << ", " << y1 << ") -> (" << x2 << ", " << y2 << ") is " << cost << std::endl;
   return cost;
 }
 
@@ -88,9 +89,20 @@ void shortestPath(std::vector<LaserOperation>* imageOps)
     int xStart = imageOps->at(i).getEndingXLoc();
     int yStart = imageOps->at(i).getEndingYLoc(); // find our starting point
     int nearestIndex = i+1;
-    for (int j = i+2; j < imageOps->size(); j++)
+    for (int j = i+2; (j < imageOps->size()-1) && (j < 2*X_MAX); j++)
     {
-      if (effectiveDistance(xStart, yStart, imageOps->at(j).getStartingXLoc(), imageOps->at(j).getStartingYLoc()) > effectiveDistance(xStart, yStart, imageOps->at(nearestIndex).getStartingXLoc(), imageOps->at(nearestIndex).getStartingYLoc()))
+      if (
+          effectiveDistance(
+            xStart,
+            yStart,
+            imageOps->at(j).getStartingXLoc(),
+            imageOps->at(j).getStartingYLoc())
+          < effectiveDistance(
+            xStart,
+            yStart,
+            imageOps->at(nearestIndex).getStartingXLoc(),
+            imageOps->at(nearestIndex).getStartingYLoc())
+          )
       {
         nearestIndex = j;
       }
@@ -131,11 +143,11 @@ int main(int argc, char **argv)
 
   std::string windName = "Preview";
   cv::namedWindow(windName);
-  cv::imshow(windName, image);
-  cv::waitKey(0);
+  //cv::imshow(windName, image);
+  //cv::waitKey(0);
   std::string temp; // wait for input before continuing
   std::cin >> temp;
-  pSerial = new Serial("/dev/ttyACM0");
+  //pSerial = new Serial("/dev/ttyACM0");
 
   std::vector<LaserOperation> imageOps;
   imageOps.push_back(*(new LaserOperation()));
@@ -238,7 +250,11 @@ int main(int argc, char **argv)
   std::cout << "Generated " << imageOps.size() << " operations, costing " << tempCost << std::endl;
   std::cout << tempCost/400 << " seconds" << std::endl;
   std::cin >> tempCost;
-
+  shortestPath(&imageOps);
+  tempCost = totalCost(imageOps);
+  std::cout << "Generated " << imageOps.size() << " operations, costing " << tempCost << std::endl;
+  std::cout << tempCost/400 << " seconds" << std::endl;
+  std::cin >> tempCost;
   for (int i = 0; i < imageOps.size(); i++)
   {
     imageOps.at(i).run();
