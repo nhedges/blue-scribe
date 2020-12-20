@@ -143,11 +143,11 @@ int main(int argc, char **argv)
 
   std::string windName = "Preview";
   cv::namedWindow(windName);
-  //cv::imshow(windName, image);
-  //cv::waitKey(0);
+  cv::imshow(windName, image);
+  cv::waitKey(0);
   std::string temp; // wait for input before continuing
   std::cin >> temp;
-  //pSerial = new Serial("/dev/ttyACM0");
+  pSerial = new Serial("/dev/ttyACM0");
 
   std::vector<LaserOperation> imageOps;
   imageOps.push_back(*(new LaserOperation()));
