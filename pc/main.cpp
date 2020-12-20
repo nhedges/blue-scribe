@@ -89,7 +89,7 @@ void shortestPath(std::vector<LaserOperation>* imageOps)
     int xStart = imageOps->at(i).getEndingXLoc();
     int yStart = imageOps->at(i).getEndingYLoc(); // find our starting point
     int nearestIndex = i+1;
-    for (int j = i+2; (j < imageOps->size()-1) && (j-i < 2*X_MAX); j++)
+    for (int j = i+2; (j < imageOps->size()-1) && (j-i < 4*X_MAX); j++)
     {
       if (
           effectiveDistance(
@@ -109,6 +109,17 @@ void shortestPath(std::vector<LaserOperation>* imageOps)
     }
     if (nearestIndex != i+1)
     {
+      /*std::cout << "swapped cost " << effectiveDistance(
+            xStart,
+            yStart,
+            imageOps->at(i+1).getStartingXLoc(),
+            imageOps->at(i+1).getStartingYLoc())
+        << " for cost " << effectiveDistance(
+            xStart,
+            yStart,
+            imageOps->at(nearestIndex).getStartingXLoc(),
+            imageOps->at(nearestIndex).getStartingYLoc())
+        << std::endl;*/
       std::swap(imageOps->at(i+1), imageOps->at(nearestIndex));
     }
   }
@@ -147,7 +158,6 @@ int main(int argc, char **argv)
   cv::waitKey(0);
   std::string temp; // wait for input before continuing
   std::cin >> temp;
-  pSerial = new Serial("/dev/ttyACM0");
 
   std::vector<LaserOperation> imageOps;
   imageOps.push_back(*(new LaserOperation()));
@@ -255,6 +265,7 @@ int main(int argc, char **argv)
   std::cout << "Generated " << imageOps.size() << " operations, costing " << tempCost << std::endl;
   std::cout << tempCost/400 << " seconds" << std::endl;
   std::cin >> tempCost;
+  pSerial = new Serial("/dev/ttyACM0");
   for (int i = 0; i < imageOps.size(); i++)
   {
     imageOps.at(i).run();
