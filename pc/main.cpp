@@ -89,7 +89,7 @@ void shortestPath(std::vector<LaserOperation>* imageOps)
     int xStart = imageOps->at(i).getEndingXLoc();
     int yStart = imageOps->at(i).getEndingYLoc(); // find our starting point
     int nearestIndex = i+1;
-    for (int j = i+2; (j < imageOps->size()-1) && (j < 2*X_MAX); j++)
+    for (int j = i+2; (j < imageOps->size()-1) && (j-i < 2*X_MAX); j++)
     {
       if (
           effectiveDistance(
