@@ -1,6 +1,6 @@
 #makefile
 #captureWC
-LIBS = `pkg-config --cflags --libs opencv4`
+LIBS = `pkg-config --cflags --libs opencv`
 CC = g++ -std=c++11 -O3
 
 all: laserPrint
