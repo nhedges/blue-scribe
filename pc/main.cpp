@@ -125,6 +125,62 @@ void shortestPath(std::vector<LaserOperation>* imageOps)
   }
 }
 
+void alignCorners(int xmin, int ymin, int xmax, int ymax)
+{
+  std::vector<LaserOperation> tempOps;
+  tempOps.back().appendInstruction(new LaserInstruction( // start from home
+      [&](std::string* txt){ uart_send(txt);}
+      ));
+
+  tempOps.push_back(*(new LaserOperation()));
+  tempOps.back().appendInstruction(
+    new LaserInstruction( // move to this pixel
+      GO,
+      xmin * MOTOR_SCALE,
+      ymin * MOTOR_SCALE,
+      [&](std::string* txt){ uart_send(txt);}
+    )
+  );
+  tempOps.push_back(*(new LaserOperation()));
+  tempOps.back().appendInstruction(
+    new LaserInstruction( // move to this pixel
+      GO,
+      xmax * MOTOR_SCALE,
+      ymin * MOTOR_SCALE,
+      [&](std::string* txt){ uart_send(txt);}
+    )
+  );
+  tempOps.push_back(*(new LaserOperation()));
+  tempOps.back().appendInstruction(
+    new LaserInstruction( // move to this pixel
+      GO,
+      xmax * MOTOR_SCALE,
+      ymax * MOTOR_SCALE,
+      [&](std::string* txt){ uart_send(txt);}
+    )
+  );
+  tempOps.push_back(*(new LaserOperation()));
+  tempOps.back().appendInstruction(
+    new LaserInstruction( // move to this pixel
+      GO,
+      xmin * MOTOR_SCALE,
+      ymax * MOTOR_SCALE,
+      [&](std::string* txt){ uart_send(txt);}
+    )
+  );
+  for (int i = 0; i < tempOps.size(); i++)
+  {
+    std::cout << "Going to a corner. Continue? [Y/n]" << std::endl;
+    tempOps.at(i).run();
+    char temp = 0;
+    std::cin >> temp;
+    if (temp == 'N' || temp == 'n')
+    {
+      i = 0;
+    }
+  }
+}
+
 int main(int argc, char **argv)
 {
   std::string inPath = argv[1];
@@ -266,6 +322,7 @@ int main(int argc, char **argv)
   std::cout << tempCost/400 << " seconds" << std::endl;
   std::cin >> tempCost;
   pSerial = new Serial("/dev/ttyACM0");
+  alignCorners(0, 0, xLimit, yLimit);
   for (int i = 0; i < imageOps.size(); i++)
   {
     imageOps.at(i).run();
