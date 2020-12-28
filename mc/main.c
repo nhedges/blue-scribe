@@ -412,29 +412,14 @@ int main(void){
 				home();
 			}
 			else if (arg1 == 'B' && arg2 == 'V') { //checks for a burn vertical input
-				
-				if ((motorLocationY + temp1) >= 0 && (motorLocationY + temp1) < YLIMIT) { //checks for a valid move
-					function = GO;
-					setPower(temp2);
-					goTo(motorLocationX, motorLocationY + temp1);
-				}
-				else { //sends an error on an invalid move
-					state = sending;
-					send(2);
-				}
+        function = GO;
+        setPower(temp2);
+        goTo(motorLocationX, motorLocationY + temp1);
 			}
 			else if(arg1 == 'B' && arg2 == 'H') { //checks for a burn horizontal input
-				
-				if ((motorLocationX + temp1) >= 0 && (motorLocationX + temp1) < XLIMIT) { //checks for a valid move
-					function = GO;
-					setPower(temp2);
-					goTo(motorLocationX + temp1, motorLocationY);
-				}
-				else { //sends an error on an invalid move
-					state = sending;
-					send(2);
-				}
-				 
+        function = GO;
+        setPower(temp2);
+        goTo(motorLocationX + temp1, motorLocationY);
 			}
 			else if(arg1 == 'S' && arg2 == 'Q') { //checks for a square input
 				function = SQ;
