@@ -239,9 +239,14 @@ int main(int argc, char **argv)
   cv::waitKey(0);
   char temp; // wait for input before continuing
 
-  std::cout << "Type the maximum output power out of 1000 (The old default used 512):";
+  std::cout << "Type the maximum output power out of 999 (The old default used 512):";
   uint32_t maxPower = 0;
   std::cin >> maxPower;
+  if (maxPower > 999)
+  {
+    std::cout << "Entered power is too high. Setting to 999 instead." << std::endl;
+    maxPower = 999;
+  }
   laserScale = (double)maxPower/(double)255;
 
   std::vector<LaserOperation> imageOps;
