@@ -23,7 +23,6 @@
 #define X_MAX 380
 #define Y_MAX 380
 #define MOTOR_SCALE 50
-#define LASER_SCALE 2 // max 510/1000 power
 static Serial* pSerial;
 
 int yNprompt(const char* message)
@@ -208,6 +207,7 @@ int main(int argc, char **argv)
   image = cv::imread(inPath, cv::IMREAD_GRAYSCALE);
   cv::Size imageSize = image.size();
   uint32_t xLimit, yLimit;
+  double laserScale = 2;
   if (imageSize.width < X_MAX)
   {
     xLimit = imageSize.width;
@@ -232,11 +232,22 @@ int main(int argc, char **argv)
     return 1;
   }
 
+
   std::string windName = "Preview";
   cv::namedWindow(windName);
   cv::imshow(windName, image);
   cv::waitKey(0);
   char temp; // wait for input before continuing
+
+  std::cout << "Type the maximum output power out of 999 (The old default used 512):";
+  uint32_t maxPower = 0;
+  std::cin >> maxPower;
+  if (maxPower > 999)
+  {
+    std::cout << "Entered power is too high. Setting to 999 instead." << std::endl;
+    maxPower = 999;
+  }
+  laserScale = (double)maxPower/(double)255;
 
   std::vector<LaserOperation> imageOps;
   imageOps.push_back(*(new LaserOperation()));
@@ -281,7 +292,7 @@ int main(int argc, char **argv)
           new LaserInstruction(
             BH,
             (extend+1) * MOTOR_SCALE,
-            pixHere * LASER_SCALE,
+            pixHere * laserScale,
             [&](std::string* txt){ uart_send(txt);}
           )
         );
@@ -320,7 +331,7 @@ int main(int argc, char **argv)
           new LaserInstruction(
             BH,
             (extend-1) * MOTOR_SCALE,
-            pixHere * LASER_SCALE,
+            pixHere * laserScale,
             [&](std::string* txt){ uart_send(txt);}
           )
         );
