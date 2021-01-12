@@ -242,7 +242,7 @@ int main(int argc, char **argv)
   std::cout << "Type the maximum output power out of 1000 (The old default used 512):";
   uint32_t maxPower = 0;
   std::cin >> maxPower;
-  laserScale = maxPower/255;
+  laserScale = (double)maxPower/(double)255;
 
   std::vector<LaserOperation> imageOps;
   imageOps.push_back(*(new LaserOperation()));
