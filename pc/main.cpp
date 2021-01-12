@@ -232,16 +232,17 @@ int main(int argc, char **argv)
     return 1;
   }
 
-  std::cout << "Type the maximum output power out of 1000 (The old default used 512):";
-  uint32_t maxPower = 0;
-  std::cin >> maxPower;
-  laserScale = 1000/maxPower;
 
   std::string windName = "Preview";
   cv::namedWindow(windName);
   cv::imshow(windName, image);
   cv::waitKey(0);
   char temp; // wait for input before continuing
+
+  std::cout << "Type the maximum output power out of 1000 (The old default used 512):";
+  uint32_t maxPower = 0;
+  std::cin >> maxPower;
+  laserScale = maxPower/255;
 
   std::vector<LaserOperation> imageOps;
   imageOps.push_back(*(new LaserOperation()));
