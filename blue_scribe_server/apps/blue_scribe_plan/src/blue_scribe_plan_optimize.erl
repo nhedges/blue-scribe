@@ -120,6 +120,6 @@ plan_cost_test() ->
  {laser_operation,1650,1450,[{laser_command,'BH',-50,510}]},
  {laser_operation,1000,1450,[{laser_command,'BH',-50,510}]},
  {laser_operation,1000,1500,[{laser_command,'BH',700,510}]}],
- ?assertEqal(7650, plan_cost(ExamplePlan1)).
+ ?assertEqual(7650, plan_cost(ExamplePlan1)).
 
 -endif.%TEST
