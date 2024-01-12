@@ -6,7 +6,7 @@
 -include_lib("eunit/include/eunit.hrl").
 -endif.%TEST
 
--export([plan_cost/1]).
+-export([plan_cost/1, greedy_optimize/1]).
 
 
 -spec plan_cost(Plan :: laser_plan()) -> non_neg_integer().
@@ -21,6 +21,49 @@ plan_cost(Plan) ->
                 {0, 0, 0},
                 Plan),
     Cost.
+
+-spec greedy_optimize(Plan :: laser_plan()) -> laser_plan().
+greedy_optimize(Plan) ->
+    {StartInstruction, RestPlan} = extract_closest_op(0, 0, Plan),
+    greedy_optimize_(RestPlan, [StartInstruction]).
+
+-spec greedy_optimize_(UnoptimizedPlan :: laser_plan(),
+                       OptimizedPlan :: laser_plan()) ->
+
+    laser_plan().
+greedy_optimize_([], OptPlan) ->
+    OptPlan;
+greedy_optimize_(UnoptPlan, OptPlan) ->
+    {LastX, LastY} = destination(0, 0, lists:last(OptPlan)),
+    {NextInstruction, RestUnopt} = extract_closest_op(LastX, LastY, UnoptPlan),
+    greedy_optimize_(RestUnopt, lists:append(OptPlan, [NextInstruction])).
+
+
+%% -----------------------------------------------------------------------------
+%% @doc Finds nearest command or operation to a certain point.
+%% Commands outside of operations have no known starting point,
+%% so they are always considered zero distance so they will keep their
+%% place at the beginning of the plan if they are present.
+%% -----------------------------------------------------------------------------
+-spec extract_closest_op(Xs :: non_neg_integer(),
+                       Ys :: non_neg_integer(),
+                       Plan :: laser_plan()) ->
+    {#laser_operation{} | #laser_command{}, laser_plan()}.
+extract_closest_op(Xs, Ys, Plan) ->
+    DistMap =
+    lists:map(fun(#laser_command{} = _Cmd) ->
+                      0;
+                 (#laser_operation{start_x = Xd,
+                                   start_y = Yd} = _Op) ->
+                      distance(Xs, Ys, Xd, Yd)
+              end,
+              Plan),
+    MinDist = lists:min(DistMap),
+    IndexedDist = lists:zip(DistMap, lists:seq(1,length(DistMap))),
+    {MinDist, Idx} = lists:keyfind(MinDist, 1, IndexedDist),
+    ClosestOp = lists:nth(Idx, Plan),
+    {ClosestOp, lists:delete(ClosestOp, Plan)}.
+    
 
 -spec operation_cost(StartX :: non_neg_integer(),
                      StartY :: non_neg_integer(),
@@ -121,5 +164,66 @@ plan_cost_test() ->
  {laser_operation,1000,1450,[{laser_command,'BH',-50,510}]},
  {laser_operation,1000,1500,[{laser_command,'BH',700,510}]}],
  ?assertEqual(7650, plan_cost(ExamplePlan1)).
+
+extract_closest_op_test() ->
+    ExPlan2 =
+    [{laser_operation,1200,1200,[{laser_command,'BH',50,16}]},
+     {laser_operation,1650,1250,[{laser_command,'BH',-50,510}]},
+     {laser_operation,1000,1100,[{laser_command,'BH',50,510}]},
+     {laser_operation,1000,1250,[{laser_command,'BH',-50,510}]}],
+    Closest = 
+    {laser_operation,1000,1100,[{laser_command,'BH',50,510}]},
+    PlanWithoutClosest = lists:delete(Closest, ExPlan2),
+    ?assertEqual({Closest, PlanWithoutClosest}, extract_closest_op(0, 0, ExPlan2)),
+    ExPlan3 =
+    lists:append([ExPlan2, [#laser_command{class='HM', arg1=0, arg2=0}]]),
+    Closest3 = #laser_command{class='HM', arg1=0, arg2=0},
+    PlanWithoutClosest3 = ExPlan2,
+    ?assertEqual({Closest3, PlanWithoutClosest3}, extract_closest_op(2000, 2000, ExPlan3)).
+
+greedy_optimize_test() ->
+    ExamplePlan1 =
+    [{laser_operation,0,0,[{laser_command,'BH',50,510}]},
+     {laser_operation,1000,1000,[{laser_command,'BH',700,510}]},
+     {laser_operation,1650,1050,[{laser_command,'BH',-50,510}]},
+     {laser_operation,1200,1050,[{laser_command,'BH',-50,32}]},
+     {laser_operation,1000,1050,[{laser_command,'BH',-50,510}]},
+     {laser_operation,1000,1100,[{laser_command,'BH',50,510}]},
+     {laser_operation,1650,1150,[{laser_command,'BH',-50,510}]},
+     {laser_operation,1200,1150,[{laser_command,'BH',-50,20}]},
+     {laser_operation,1000,1150,[{laser_command,'BH',-50,510}]},
+     {laser_operation,1000,1200,[{laser_command,'BH',50,510}]},
+     {laser_operation,1200,1200,[{laser_command,'BH',50,16}]},
+     {laser_operation,1650,1250,[{laser_command,'BH',-50,510}]},
+     {laser_operation,1000,1250,[{laser_command,'BH',-50,510}]},
+     {laser_operation,1000,1300,[{laser_command,'BH',50,510}]},
+     {laser_operation,1650,1350,[{laser_command,'BH',-50,510}]},
+     {laser_operation,1000,1350,[{laser_command,'BH',-50,510}]},
+     {laser_operation,1000,1400,[{laser_command,'BH',50,510}]},
+     {laser_operation,1650,1450,[{laser_command,'BH',-50,510}]},
+     {laser_operation,1000,1450,[{laser_command,'BH',-50,510}]},
+     {laser_operation,1000,1500,[{laser_command,'BH',700,510}]}],
+    OptimizedPlan1 =
+    [{laser_operation,0,0,[{laser_command,'BH',50,510}]},
+     {laser_operation,1000,1000,[{laser_command,'BH',700,510}]},
+     {laser_operation,1650,1050,[{laser_command,'BH',-50,510}]},
+     {laser_operation,1650,1150,[{laser_command,'BH',-50,510}]},
+     {laser_operation,1650,1250,[{laser_command,'BH',-50,510}]},
+     {laser_operation,1650,1350,[{laser_command,'BH',-50,510}]},
+     {laser_operation,1650,1450,[{laser_command,'BH',-50,510}]},
+     {laser_operation,1200,1050,[{laser_command,'BH',-50,32}]},
+     {laser_operation,1200,1150,[{laser_command,'BH',-50,20}]},
+     {laser_operation,1200,1200,[{laser_command,'BH',50,16}]},
+     {laser_operation,1000,1050,[{laser_command,'BH',-50,510}]},
+     {laser_operation,1000,1100,[{laser_command,'BH',50,510}]},
+     {laser_operation,1000,1150,[{laser_command,'BH',-50,510}]},
+     {laser_operation,1000,1200,[{laser_command,'BH',50,510}]},
+     {laser_operation,1000,1250,[{laser_command,'BH',-50,510}]},
+     {laser_operation,1000,1300,[{laser_command,'BH',50,510}]},
+     {laser_operation,1000,1350,[{laser_command,'BH',-50,510}]},
+     {laser_operation,1000,1400,[{laser_command,'BH',50,510}]},
+     {laser_operation,1000,1450,[{laser_command,'BH',-50,510}]},
+     {laser_operation,1000,1500,[{laser_command,'BH',700,510}]}],
+    ?assertEqual(OptimizedPlan1, greedy_optimize(ExamplePlan1)).
 
 -endif.%TEST
