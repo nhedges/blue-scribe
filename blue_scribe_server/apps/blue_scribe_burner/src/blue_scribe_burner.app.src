@@ -1,0 +1,14 @@
+{application, blue_scribe_burner,
+ [{description, "An OTP application"},
+  {vsn, "0.1.0"},
+  {registered, []},
+  {mod, {blue_scribe_burner_app, []}},
+  {applications,
+   [kernel,
+    stdlib
+   ]},
+  {env,[]},
+  {modules, []},
+
+  {links, []}
+ ]}.
