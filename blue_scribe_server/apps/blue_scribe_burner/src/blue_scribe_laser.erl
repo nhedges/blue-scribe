@@ -6,6 +6,9 @@
 
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2]).
 
+%TEMP
+-export([do_setup_serial/3]).
+
 -include_lib("blue_scribe_burner/include/blue_scribe_burner.hrl").
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").
@@ -13,7 +16,7 @@
 
 -record(state,{serial_pid :: pid() | undefined,
                plan :: laser_plan() | corner_alignment | undefined,
-               active_op :: #laser_operation{} | undefined,
+               active_op :: laser_cmdop() | undefined,
                corner_alignment :: 0..3 | undefined,
                paused = false :: boolean()}).
 
@@ -41,19 +44,21 @@ start_link() ->
     gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
 
 init([]) ->
-    {ok, #state{}}.
+    {ok, SerialPid} = laser_serial_mockup:start(self()),
+    {ok, #state{serial_pid=SerialPid}}.
 
 handle_call(_, _From, #state{serial_pid=undefined}=State) ->
     {reply, {error, no_serial}, State};
 
 handle_call({start_burn, PlanId}, _From, #state{plan=undefined,
-                                       active_op=undefined,
-                                       corner_alignment=undefined}=State) ->
+                                                active_op=undefined,
+                                                serial_pid=SerialPid,
+                                                corner_alignment=undefined}=State) ->
     case blue_scribe_plan:get_plan(PlanId) of
         {ok, Plan} ->
-            {ActiveOp, ActiveCmd, RestPlan} =
-            %do_run_next_op(Plan),
-            {blah, blah, blah},
+            {ActiveOp, RestPlan} =
+            do_advance_plan(undefined, Plan),
+            do_run_op(ActiveOp, SerialPid),
             {reply, ok, State#state{plan=RestPlan,
                                     active_op=ActiveOp}};
         {error, Err} ->
@@ -65,9 +70,10 @@ handle_call({start_burn, _PlanId}, _From, State) ->
     {reply, {error, busy}, State};
 
 handle_call(home, _From, #state{plan=undefined,
+                                serial_pid=SerialPid,
                                 active_op=undefined}=State) ->
-    %TODO execute a home command
-    {reply, ok, State};
+    Res = do_run_op(#laser_command{class='HM', arg1=0, arg2=0}, SerialPid),
+    {reply, Res, State};
 
 handle_call(home, _From, #state{plan=Plan}=State) ->
     NewPlan = [#laser_command{class='HM', arg1=0, arg2=0} | Plan],
@@ -87,12 +93,12 @@ handle_call(pause_burn, _From, #state{plan=undefined}=State) ->
 handle_call(pause_burn, _From, #state{}=State) ->
     {reply, ok, State#state{paused=true}};
 
-handle_call(resum_burn, _From, #state{plan=undefined}=State) ->
+handle_call(resume_burn, _From, #state{plan=undefined}=State) ->
     {reply, {error, not_running}, State};
 
 handle_call(resume_burn, _From, #state{}=State) ->
     %TODO do something to resume?
-    {reply, ok, State#state{paused=false}};
+    {reply, {error, not_implemented}, State#state{paused=false}};
 
 handle_call(Call, _, State) ->
     logger:warning("~p: Unknown call ~p", [?MODULE, Call]),
@@ -106,12 +112,6 @@ handle_info({serial_rx_data, BinaryMessage},
             #state{}=State) ->
     {ok, NewState} = do_handle_serial_message(BinaryMessage, State),
     {noreply, NewState}.
-
--spec do_send_laser_command(Cmd :: #laser_command{}) ->
-    {ok, NewXLoc :: non_neg_integer(), NewYLoc :: non_neg_integer()} | {error,_}.
-do_send_laser_command(Cmd) ->
-    io:format("~p: Sending laser command: ~p~n", [?MODULE, Cmd]),
-    {error, not_implemented}.
 
 -spec do_setup_serial(Path::string(),
                       Baud::serial_baud(),
@@ -128,9 +128,10 @@ do_setup_serial(Path, Baud, _ListenerPid) ->
 do_handle_serial_message(<<"Error\n\r">>, #state{active_op=Op}=State) ->
     logger:error("~p: Microcontroller responded with error. "
                  "Active op: ~p", [?MODULE, Op]),
-    ok;
+    State;
 do_handle_serial_message(<<"A\n\r">>, #state{plan=Plan,
                                              active_op=Op,
+                                             serial_pid=SerialPid,
                                              paused=Paused}=State) ->
     logger:debug("~p: Command completed successfully: ~p",
                  [?MODULE, do_get_next_cmd(Op)]),
@@ -144,14 +145,9 @@ do_handle_serial_message(<<"A\n\r">>, #state{plan=Plan,
         {true,_} -> do_nothing;
         {_, undefined} -> do_nothing;
         {_, Cmd} ->
-            % send the cmd
-            ok
+            ok = do_run_cmd(Cmd, SerialPid)
     end,
-
-    % TODO need to modify logic
-    % - support pausing
-    % - augment new OPs with GO command (do_load_new_op/1)
-    % - prevent mid-op homing (maybe by placing inserted homes after an op)
+    %TODO support pause/unpause?
     {ok, State#state{plan=NewPlan, active_op=NewActiveOp}}.
 
 -spec do_get_next_cmd(Op :: laser_cmdop()) -> #laser_command{} | undefined.
@@ -164,20 +160,24 @@ do_get_next_cmd(_) ->
 %% -----------------------------------------------------------------------------
 %% @doc  Some logic about how operations/commands advance in the queue
 %% -----------------------------------------------------------------------------
--spec do_advance_plan(ActiveOp :: #laser_operation{},
+-spec do_advance_plan(ActiveOp :: laser_cmdop() | undefined,
                       Plan :: laser_plan()) ->
     {NewActiveOp :: laser_cmdop()|undefined, NewPlan :: laser_plan()|undefined}.
 do_advance_plan(#laser_command{}, []) ->
     {undefined, undefined};
 do_advance_plan(#laser_operation{commands=[]}, []) ->
     {undefined, undefined};
+do_advance_plan(undefined, []) ->
+    {undefined, undefined};
 do_advance_plan(#laser_command{}, [NextOp | ReducedPlan]) ->
     % just advance, laser command is singular
+    {do_load_new_op(NextOp), ReducedPlan};
+do_advance_plan(undefined, [NextOp | ReducedPlan]) ->
     {do_load_new_op(NextOp), ReducedPlan};
 do_advance_plan(#laser_operation{commands=[]}, [NextOp | ReducedPlan]) ->
     % operation is completed, advance to next op
     {do_load_new_op(NextOp), ReducedPlan};
-do_advance_plan(#laser_operation{commands=[NextCmd | RestCmd]}=Op, Plan) ->
+do_advance_plan(#laser_operation{commands=[_NextCmd | RestCmd]}=Op, Plan) ->
     % more cmds in the op
     % the plan stays the same and the op has its completed cmd removed
     {Op#laser_operation{commands=RestCmd}, Plan}.
@@ -194,6 +194,27 @@ do_load_new_op(#laser_operation{start_x=X, start_y=Y, commands=Cmds}=Op) ->
                                                 arg1=X,
                                                 arg2=Y} | Cmds]}.
 
+%% -----------------------------------------------------------------------------
+%% @doc Run the next command or next command in an operation by sending it
+%% to the serial/uart process
+%% -----------------------------------------------------------------------------
+-spec do_run_op(OpCmd :: laser_cmdop(), SerialPid :: pid()) ->
+    ok | {error,_}.
+do_run_op(#laser_command{}=Cmd, Pid) ->
+    do_run_cmd(Cmd, Pid);
+do_run_op(#laser_operation{commands=[]}, _Pid) ->
+    logger:error("~p: do_run_op/1 Empty Op", [?MODULE]),
+    {error, empty};
+do_run_op(#laser_operation{commands=[NextCmd | _]}, Pid) ->
+    do_run_cmd(NextCmd, Pid).
+
+%% -----------------------------------------------------------------------------
+%% @doc Send a laser command to the serial/uart process
+%% -----------------------------------------------------------------------------
+-spec do_run_cmd(Cmd :: #laser_command{}, SerialPid :: pid()) -> ok | {error,_}.
+do_run_cmd(Cmd, Pid) ->
+    Bin = do_format_command(Cmd),
+    serial:send(Pid, Bin).
 
 -spec do_format_command(Cmd :: #laser_command{}) -> binary().
 do_format_command(#laser_command{class='HM'}) ->
@@ -253,7 +274,8 @@ plan_advancement_test() ->
     ?assertEqual({ExampleOp1WithGo, []}, do_advance_plan(ExampleCommand1, [ExampleOp1])),
     ExampleOp1Reduced =
     ExampleOp1#laser_operation{commands=[ExampleCommand2]},
-    ?assertEqual({ExampleOp1Reduced, TestPlan1}, do_advance_plan(ExampleOp1, TestPlan1)).
+    ?assertEqual({ExampleOp1Reduced, TestPlan1}, do_advance_plan(ExampleOp1, TestPlan1)),
+    ?assertEqual({ExampleOp1WithGo, [ExampleOp2]}, do_advance_plan(undefined, TestPlan1)).
 
 -endif.%TEST
 
