@@ -121,7 +121,7 @@ handle_info({serial_rx_data, BinaryMessage},
                       Baud::serial_baud(),
                       ListenerPid::pid()) -> {ok, pid()}|{error,_}.
 do_setup_serial(Path, Baud, _ListenerPid) ->
-  io:format("Setting up serial for ~s, @ ~p baud~n",[Path, Baud]),
+  logger:info("~p: Setting up serial for ~s, @ ~p baud~n",[?MODULE, Path, Baud]),
   {ok, SerialPid} =
   serial:start_link([{open, Path},{speed, Baud},{message_delimiter, "\r\n"}]),
   %serial:send(SerialPid, "AT\r\n"),
