@@ -143,11 +143,18 @@ do_handle_serial_message(<<"A\n\r">>, #state{plan=Plan,
     do_advance_plan(Op, Plan),
     case {Paused, do_get_next_cmd(NewActiveOp)} of
         {true,_} -> do_nothing;
-        {_, undefined} -> do_nothing;
+        {_, undefined} ->
+            logger:debug("~p: undefined next cmd", [?MODULE]),
+            do_nothing;
         {_, Cmd} ->
             ok = do_run_cmd(Cmd, SerialPid)
     end,
     %TODO support pause/unpause?
+    logger:debug("~p: New plan has ~p elements, active op = ~p",
+                 [?MODULE, case is_list(NewPlan) of
+                               true -> length(NewPlan);
+                               false -> undefined
+                           end, NewActiveOp]),
     {ok, State#state{plan=NewPlan, active_op=NewActiveOp}}.
 
 -spec do_get_next_cmd(Op :: laser_cmdop()) -> #laser_command{} | undefined.
@@ -165,19 +172,36 @@ do_get_next_cmd(_) ->
     {NewActiveOp :: laser_cmdop()|undefined, NewPlan :: laser_plan()|undefined}.
 do_advance_plan(#laser_command{}, []) ->
     {undefined, undefined};
-do_advance_plan(#laser_operation{commands=[]}, []) ->
+do_advance_plan(#laser_operation{commands=CmdList}, []) when is_list(CmdList) andalso
+                                                             length(CmdList) =< 1 ->
     {undefined, undefined};
 do_advance_plan(undefined, []) ->
     {undefined, undefined};
 do_advance_plan(#laser_command{}, [NextOp | ReducedPlan]) ->
     % just advance, laser command is singular
+    logger:debug("~p: Advancing past singular command", [?MODULE]),
+    %case ReducedPlan of
+    %    [] ->
+    %        {undefined, undefined};
+    %    _ ->
+    %        {do_load_new_op(NextOp), ReducedPlan}
+    %end;
     {do_load_new_op(NextOp), ReducedPlan};
 do_advance_plan(undefined, [NextOp | ReducedPlan]) ->
+    logger:debug("~p: Advancing past undefined", [?MODULE]),
     {do_load_new_op(NextOp), ReducedPlan};
-do_advance_plan(#laser_operation{commands=[]}, [NextOp | ReducedPlan]) ->
+do_advance_plan(#laser_operation{commands=[_LastCmd]}, [NextOp | ReducedPlan]) ->
+    logger:debug("~p: Advancing past completed operation", [?MODULE]),
     % operation is completed, advance to next op
+    %case ReducedPlan of
+    %    [] ->
+    %        {undefined, undefined};
+    %    _ ->
+    %        {do_load_new_op(NextOp), ReducedPlan}
+    %end;
     {do_load_new_op(NextOp), ReducedPlan};
-do_advance_plan(#laser_operation{commands=[_NextCmd | RestCmd]}=Op, Plan) ->
+do_advance_plan(#laser_operation{commands=[_PastCmd | RestCmd]}=Op, Plan) ->
+    logger:debug("~p: Advancing to next CMD in operation", [?MODULE]),
     % more cmds in the op
     % the plan stays the same and the op has its completed cmd removed
     {Op#laser_operation{commands=RestCmd}, Plan}.
