@@ -180,25 +180,12 @@ do_advance_plan(undefined, []) ->
 do_advance_plan(#laser_command{}, [NextOp | ReducedPlan]) ->
     % just advance, laser command is singular
     logger:debug("~p: Advancing past singular command", [?MODULE]),
-    %case ReducedPlan of
-    %    [] ->
-    %        {undefined, undefined};
-    %    _ ->
-    %        {do_load_new_op(NextOp), ReducedPlan}
-    %end;
     {do_load_new_op(NextOp), ReducedPlan};
 do_advance_plan(undefined, [NextOp | ReducedPlan]) ->
     logger:debug("~p: Advancing past undefined", [?MODULE]),
     {do_load_new_op(NextOp), ReducedPlan};
 do_advance_plan(#laser_operation{commands=[_LastCmd]}, [NextOp | ReducedPlan]) ->
     logger:debug("~p: Advancing past completed operation", [?MODULE]),
-    % operation is completed, advance to next op
-    %case ReducedPlan of
-    %    [] ->
-    %        {undefined, undefined};
-    %    _ ->
-    %        {do_load_new_op(NextOp), ReducedPlan}
-    %end;
     {do_load_new_op(NextOp), ReducedPlan};
 do_advance_plan(#laser_operation{commands=[_PastCmd | RestCmd]}=Op, Plan) ->
     logger:debug("~p: Advancing to next CMD in operation", [?MODULE]),
