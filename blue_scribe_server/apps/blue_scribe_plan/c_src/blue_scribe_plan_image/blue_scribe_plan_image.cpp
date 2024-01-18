@@ -16,9 +16,7 @@ typedef struct {
 static void cvMatDtor(ErlNifEnv* env, void* mat)
 {
     CvImage* m = (CvImage*)mat;
-    std::cout << "Destructing matrix " << m->id << std::endl;
     matMap.erase(m->id);
-    std::cout << "Destructed matrix" << std::endl;
 }
 
 static ErlNifResourceType* matRt = NULL;
@@ -44,16 +42,12 @@ static ERL_NIF_TERM do_load_png_file(ErlNifEnv* env, int argc, const ERL_NIF_TER
     char filename[1024];
     if (enif_get_string(env, argv[0], filename, 1024, ERL_NIF_LATIN1) <= 0)
         return enif_make_badarg(env);
-    std::cout << "Verified input string less than 1024 chars" << filename << std::endl;
     cv::Mat readImage = cv::imread(filename, cv::IMREAD_GRAYSCALE);
-    cv::Size imageSize = readImage.size();
-    std::cout << "read mat size " << imageSize.width << " x " << imageSize.height << std::endl;
     uint64_t id = matIdRes++;
     matMap.insert({id, readImage});
     CvImage* imageRes = (CvImage*)enif_alloc_resource(matRt, sizeof(CvImage));
     imageRes->id = id;
     ERL_NIF_TERM ret = enif_make_resource(env, imageRes);
-    std::cout << "created enif resource" << std::endl;
     return ret;
 }
 
@@ -72,12 +66,10 @@ static ERL_NIF_TERM do_crop_image(ErlNifEnv* env, int argc, const ERL_NIF_TERM a
 
     if(!enif_get_resource(env, argv[0], matRt, (void**)&imageResource))
         return enif_make_badarg(env);
-    std::cout << "got resource" << std::endl;
     auto foundElement = matMap.find(imageResource->id);
     if (foundElement == matMap.end()) return enif_make_badarg(env);
     cv::Mat image = matMap.at(imageResource->id);
     cv::Size imageSize = image.size();
-    std::cout << "got mat size " << imageSize.width << " x " << imageSize.height << std::endl;
 
     if(!enif_get_int(env, argv[1], &xMax))
         return enif_make_badarg(env);
@@ -108,7 +100,6 @@ static ERL_NIF_TERM do_crop_image(ErlNifEnv* env, int argc, const ERL_NIF_TERM a
     CvImage* imageRes = (CvImage*)enif_alloc_resource(matRt, sizeof(CvImage));
     imageRes->id = id;
     ERL_NIF_TERM ret = enif_make_resource(env, imageRes);
-    std::cout << "cropped and saved" << std::endl;
     return ret;
 }
 
@@ -119,12 +110,9 @@ static ERL_NIF_TERM do_png_encode(ErlNifEnv* env, int argc, const ERL_NIF_TERM a
         return enif_make_badarg(env);
     if(!enif_get_resource(env, argv[0], matRt, (void**)&imageResource))
         return enif_make_badarg(env);
-    std::cout << "got resource" << std::endl;
     auto foundElement = matMap.find(imageResource->id);
     if (foundElement == matMap.end()) return enif_make_badarg(env);
     cv::Mat image = matMap.at(imageResource->id);
-    cv::Size imageSize = image.size();
-    std::cout << "got mat size " << imageSize.width << " x " << imageSize.height << std::endl;
     std::vector<uchar> buf;
     cv::imencode(".png", image, buf, std::vector<int>());
     ERL_NIF_TERM encodedTerm;
@@ -172,12 +160,10 @@ static ERL_NIF_TERM do_image_to_plan(ErlNifEnv* env, int argc, const ERL_NIF_TER
     if(!enif_get_double(env, argv[1], &laserScale))
         return enif_make_badarg(env);
 
-    std::cout << "got resource" << std::endl;
     auto foundElement = matMap.find(imageResource->id);
     if (foundElement == matMap.end()) return enif_make_badarg(env);
     cv::Mat image = matMap.at(imageResource->id);
     cv::Size imageSize = image.size();
-    std::cout << "got mat size " << imageSize.width << " x " << imageSize.height << std::endl;
     std::vector<ERL_NIF_TERM> imageOps;
     int xLimit = imageSize.width;
     int yLimit = imageSize.height;
