@@ -3,7 +3,8 @@
 -include_lib("blue_scribe_burner/include/blue_scribe_burner.hrl").
 
 -export([install/0, get_all_plan_ids/0, get_plan_name/1, get_plan_notes/1,
-         get_plan_op_list/1, create_plan/3, update_plan_name/2,
+         get_plan_op_list/1, get_plan_preview_png/1,
+         create_plan/3, update_plan_name/2,
          update_plan_notes/2, update_plan_op_list/2,
          delete_plan/1]).
 
@@ -55,6 +56,12 @@ get_plan_op_list(Id) ->
         end,
     mnesia:activity(transaction, F).
 
+-spec get_plan_preview_png(Id :: non_neg_integer()) ->
+    {ok, binary()} | {error, _}.
+get_plan_preview_png(Id) ->
+    Filename = do_get_png_filename(Id),
+    file:read_file(Filename).
+
 -spec create_plan(File :: binary(),
                   Name :: string(),
                   Notes :: string()) ->
@@ -62,13 +69,14 @@ get_plan_op_list(Id) ->
 create_plan(File, Name, Notes) ->
     F = fun() ->
                 Id = do_make_id(),
-                Filename = io_lib:format("plan_~8..0w.png", [Id]),
+                Filename = do_get_png_filename(Id),
                 %TODO make sure these go somewhere appropriate (priv, etc)
                 ok = file:write_file(Filename, File),
-                mnesia:write(#blue_scribe_plan{
-                                id=Id,
-                                name=Name,
-                                notes=Notes})
+                ok = mnesia:write(#blue_scribe_plan{
+                                     id=Id,
+                                     name=Name,
+                                     notes=Notes}),
+                {ok, Id}
         end,
     mnesia:activity(transaction, F).
 
@@ -112,9 +120,13 @@ update_plan_op_list(Id, OpList) ->
     ok | {error, _}.
 delete_plan(Id) ->
     F = fun() ->
-                Filename = io_lib:format("plan_~8..0w.png", [Id]),
-                file:delete(Filename),
-                mnesia:delete({blue_scribe_plan, Id})
+                case mnesia:read({blue_scribe_plan, Id}) of
+                    [] -> {error, not_found};
+                    _ ->
+                        Filename = do_get_png_filename(Id),
+                        file:delete(Filename),
+                        mnesia:delete({blue_scribe_plan, Id})
+                end
         end,
     mnesia:activity(transaction, F).
 
@@ -138,4 +150,7 @@ do_make_id_(N) ->
         _ ->
             do_make_id_(N * 2)
     end.
+
+do_get_png_filename(Id) ->
+    io_lib:format("plan_~8..0w.png", [Id]).
 
