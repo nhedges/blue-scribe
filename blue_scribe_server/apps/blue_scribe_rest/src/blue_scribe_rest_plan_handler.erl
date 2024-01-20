@@ -1,114 +1,110 @@
 -module(blue_scribe_rest_plan_handler).
 
--export([init/2]).
+-export([init/2, allowed_methods/2, content_types_provided/2,
+         content_types_accepted/2]).
+-export([plan_text/2, plan_html/2, plan_json/2, plan_png/2]).
 
--define(CT, <<"content-type">>).
--define(TXT, <<"text/plain">>).
--define(PNG, <<"image/png">>).
--define(JSON, <<"application/json">>).
--define(GET, <<"GET">>).
--define(POST, <<"POST">>).
--define(DEL, <<"DELETE">>).
 
 init(Req0, State) ->
-    Req =
-    case {cowboy_req:method(Req0), cowboy_req:path_info(Req0)} of
-        {?GET, [<<"getAll">>]} ->
-            AllPlanIds = blue_scribe_plan_db:get_all_plan_ids(),
-            cowboy_req:reply(200,
-                             #{?CT => ?JSON},
-                             jiffy:encode(AllPlanIds),
-                             %erl_to_formatted_bin(AllPlanIds),
-            Req0);
-        {?GET, [PlanIdBin, <<"name">>]} ->
-            case blue_scribe_plan_db:get_plan_name(
-                   list_to_integer(binary_to_list(PlanIdBin))) of
-                {ok, Name} ->
-                    cowboy_req:reply(200,
-                                     #{?CT => ?TXT},
-                                     Name,
-                                     Req0);
-                {error, not_found} ->
-                    cowboy_req:reply(404, Req0)
-            end;
-        {?GET, [PlanIdBin, <<"notes">>]} ->
-            case blue_scribe_plan_db:get_plan_notes(
-                   list_to_integer(binary_to_list(PlanIdBin))) of
-                {ok, Notes} ->
-                    cowboy_req:reply(200,
-                                     #{?CT => ?TXT},
-                                     Notes,
-                                     Req0);
-                {error, not_found} ->
-                    cowboy_req:reply(404, Req0)
-            end;
-        {?GET, [PlanIdBin, <<"preview.png">>]} ->
+    {cowboy_rest, Req0, State}.
+
+
+allowed_methods(Req0, State) ->
+    {[<<"GET">>, <<"POST">>, <<"DELETE">>], Req0, State}.
+
+content_types_provided(Req0, State) ->
+    Types = case cowboy_req:path_info(Req0) of
+                [Id, <<"preview.png">>] ->
+                    [{{<<"image">>, <<"png">>, []}, plan_png}];
+                _ ->
+                    [
+                     {{<<"text">>, <<"html">>, []}, plan_html},
+                     {{<<"application">>, <<"json">>, []}, plan_json}
+                    ]
+            end,
+    {Types, Req0, State}.
+
+content_types_accepted(Req0, State) ->
+    {[{{<<"multipart">>, <<"form-data">>, []}, create_plan}], Req0, State}.
+
+
+plan_text(Req0, State) ->
+    <<"id=", IdBin/binary>> = cowboy_req:qs(Req0),
+    Id = list_to_integer(binary_to_list(IdBin)),
+    {ok, Name} = blue_scribe_plan_db:get_plan_name(Id),
+    {ok, Desc} = blue_scribe_plan_db:get_plan_notes(Id),
+    Res = "Plan name: " ++ Name ++ "\n"
+    "Plan notes: " ++ Desc ++ "\n",
+    {list_to_binary(Res), Req0, State}.
+
+plan_html(Req0, State) ->
+    Res =
+    case cowboy_req:qs(Req0) of
+        <<>> ->
+            plan_png(Req0, State);
+        <<"id=", IdBin/binary>> ->
+            Id = list_to_integer(binary_to_list(IdBin)),
+            logger:warning("~p: plan_html(~p, ~p)", [?MODULE, Req0, Id]),
+            {ok, Name} = blue_scribe_plan_db:get_plan_name(Id),
+            {ok, Desc} = blue_scribe_plan_db:get_plan_notes(Id),
+            Str =
+            "<p> Plan name: " ++ Name ++ "</p>"
+            "<p> Plan desc: " ++ Desc ++ "</p>",
+            list_to_binary(Str);
+        <<"all">> ->
+            Ids = blue_scribe_plan_db:get_all_plan_ids(),
+            Plans =
+            lists:map(fun(Id) ->
+                              {ok, Name} = blue_scribe_plan_db:get_plan_name(Id),
+                              {ok, Desc} = blue_scribe_plan_db:get_plan_notes(Id),
+                              "<p> Plan name: " ++ Name ++ "</p>"
+                              "<p> Plan desc: " ++ Desc ++ "</p>"
+                      end,
+                      Ids),
+            list_to_binary(lists:flatten(Plans))
+    end,
+    {Res, Req0, State}.
+
+plan_json(Req0, State) ->
+    logger:notice("~p: plan_json ~p", [?MODULE, Req0]),
+    Res =
+    case cowboy_req:qs(Req0) of
+        <<"all">> ->
+            Ids = blue_scribe_plan_db:get_all_plan_ids(),
+            Plans =
+            lists:map(fun(Id) ->
+                              {ok, Name} = blue_scribe_plan_db:get_plan_name(Id),
+                              {ok, Desc} = blue_scribe_plan_db:get_plan_notes(Id),
+                              {[{<<"id">>, Id},
+                                {<<"name">>, list_to_binary(Name)},
+                                {<<"desc">>, list_to_binary(Desc)}]}
+                      end,
+                      Ids),
+            jiffy:encode(Plans);
+        <<"id=", IdBin/binary>> ->
+            Id = list_to_integer(binary_to_list(IdBin)),
+            logger:warning("~p: plan_json(~p, ~p)", [?MODULE, Req0, Id]),
+            {ok, Name} = blue_scribe_plan_db:get_plan_name(Id),
+            {ok, Desc} = blue_scribe_plan_db:get_plan_notes(Id),
+            jiffy:encode({[{<<"id">>, Id},
+                           {<<"name">>, list_to_binary(Name)},
+                           {<<"desc">>, list_to_binary(Desc)}]})
+    end,
+    {Res, Req0, State}.
+
+plan_png(Req0, State) ->
+    Res =
+    case cowboy_req:path_info(Req0) of
+        [PlanIdBin, <<"preview.png">>] ->
             case blue_scribe_plan_db:get_plan_preview_png(
                    list_to_integer(binary_to_list(PlanIdBin))) of
                 {ok, Bin} ->
-                    cowboy_req:reply(200,
-                                     #{?CT => ?PNG},
-                                     Bin,
-                                     Req0);
+                    Bin;
                 {error, not_found} ->
-                    cowboy_req:reply(404, Req0)
+                    <<>>
             end;
-        {?POST, [<<"new">>]} ->
-            %TODO handle multi-part segmentation
-            {ok, Headers, Req2} = cowboy_req:read_part(Req0),
-            {ok, Data, Req3} = cowboy_req:read_part_body(Req2),
-            {file, _, Filename, ContentType}
-            = cow_multipart:form_data(Headers),
-            case blue_scribe_plan_db:create_plan(Data, Filename, "") of
-                {ok, NewPlanId} ->
-                    cowboy_req:reply(200,
-                                     #{?CT => ?TXT},
-                                     erl_to_formatted_bin(NewPlanId),
-                                     Req0);
-                {error, Err} ->
-                cowboy_req:reply(400, Req0)
-            end;
-        {?DEL, [PlanIdBin]} ->
-            case blue_scribe_plan_db:delete_plan(
-                   list_to_integer(binary_to_list(PlanIdBin))) of
-                ok ->
-                    cowboy_req:reply(200, Req0);
-                {error, not_found} ->
-                    cowboy_req:reply(404, Req0)
-            end;
-        Other ->
-            logger:warning("~p: Unknown path: ~p", [?MODULE, Other]),
-            cowboy_req:reply(400, Req0)
+        _ ->
+            <<>>
     end,
-    {ok, Req, State}.
+    {Res, Req0, State}.
 
-init_file(Req, Opts) ->
-	{ok, Headers, Req2} = cowboy_req:read_part(Req),
-	{ok, Data, Req3} = cowboy_req:read_part_body(Req2),
-	{file, _, Filename, ContentType}
-		= cow_multipart:form_data(Headers),
-	io:format("Received file ~p of content-type ~p as follow:~n~p~n~n",
-		[Filename, ContentType, Data]),
-	{ok, Req3, Opts}.
-
-erl_to_formatted_bin(Term) ->
-    list_to_binary(
-      lists:flatten(
-        io_lib:format("~p", [Term]))).
-
-acc_multipart(Req0, Acc) ->
-    case cowboy_req:read_part(Req0) of
-        {ok, Headers, Req1} ->
-            {ok, Body, Req} = stream_body(Req1, <<>>),
-            acc_multipart(Req, [{Headers, Body}|Acc]);
-        {done, Req} ->
-            {lists:reverse(Acc), Req}
-    end.
-
-stream_body(Req0, Acc) ->
-    case cowboy_req:read_part_body(Req0) of
-        {more, Data, Req} ->
-            stream_body(Req, << Acc/binary, Data/binary >>);
-        {ok, Data, Req} ->
-            {ok, << Acc/binary, Data/binary >>, Req}
-    end.
