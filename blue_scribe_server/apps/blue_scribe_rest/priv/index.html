@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <script>
+            function gen_plan_preview(plan) {
+                var html = "";
+                html = html + "<tr><td><img src=\"plan/" + plan.id + "/preview.png\" alt=\"Plan " + plan.id + "\" style=\"width:256px;\"></td>\n";
+                html = html + "<td>";
+                html = html + "<p>" + plan.name + "</p>";
+                html = html + "<p>" + plan.desc + "</p>";
+                html = html + "</td></tr>";
+                return html;
+            }
+            function load_plans() {
+                var apiUrl = 'plan?all';
+                fetch(apiUrl, {headers: {'Accept': 'application/json'}}).then(response => {
+                return response.json();
+            }).then(data => {
+                console.log(data.length.toString());
+                var newContent = "<table>";
+                for (var i = 0; i < data.length; i++) {
+                    var a = data[i];
+                    console.log(a.name);
+                    newContent = newContent + gen_plan_preview(data[i]);
+                }
+                newContent = newContent + "</table>";
+                console.log(newContent);
+                document.getElementById("plan-list").innerHTML
+                = newContent;
+            }).catch(err => {
+                // Do something for an error here
+            });
+            }
+        </script>
+    </head>
+    <body onload="load_plans()">
+        <h1>Laser Engraver Home</h1>
+        hello, here is some content
+        <p id="plan-list">
+            Loading plan list...
+        </p>
+    </body>
+</html>
