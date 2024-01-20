@@ -39,5 +39,16 @@
         <p id="plan-list">
             Loading plan list...
         </p>
+        <form action="/plan/new" method="post" enctype="multipart/form-data">
+            <fieldset>
+                <legend>New Plan</legend>
+                <label for="name">Plan name:</label><br>
+                <input type="text" id="new-plan-name" name="name" value="John"><br>
+                <input type="file" name="image" accept=".png"><br>
+                <label for="desc">Plan Description:</label><br>
+                <textarea cols="40", rows="10", name="desc"></textarea><br>
+                <input type="submit" value="Create">
+            </fieldset>
+        </form>
     </body>
 </html>

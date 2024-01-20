@@ -2,7 +2,7 @@
 
 -export([init/2, allowed_methods/2, content_types_provided/2,
          content_types_accepted/2]).
--export([plan_text/2, plan_html/2, plan_json/2, plan_png/2]).
+-export([plan_text/2, plan_html/2, plan_json/2, plan_png/2, create_plan/2]).
 
 
 init(Req0, State) ->
@@ -44,7 +44,6 @@ plan_html(Req0, State) ->
             plan_png(Req0, State);
         <<"id=", IdBin/binary>> ->
             Id = list_to_integer(binary_to_list(IdBin)),
-            logger:warning("~p: plan_html(~p, ~p)", [?MODULE, Req0, Id]),
             {ok, Name} = blue_scribe_plan_db:get_plan_name(Id),
             {ok, Desc} = blue_scribe_plan_db:get_plan_notes(Id),
             Str =
@@ -66,7 +65,6 @@ plan_html(Req0, State) ->
     {Res, Req0, State}.
 
 plan_json(Req0, State) ->
-    logger:notice("~p: plan_json ~p", [?MODULE, Req0]),
     Res =
     case cowboy_req:qs(Req0) of
         <<"all">> ->
@@ -83,7 +81,6 @@ plan_json(Req0, State) ->
             jiffy:encode(Plans);
         <<"id=", IdBin/binary>> ->
             Id = list_to_integer(binary_to_list(IdBin)),
-            logger:warning("~p: plan_json(~p, ~p)", [?MODULE, Req0, Id]),
             {ok, Name} = blue_scribe_plan_db:get_plan_name(Id),
             {ok, Desc} = blue_scribe_plan_db:get_plan_notes(Id),
             jiffy:encode({[{<<"id">>, Id},
@@ -108,3 +105,45 @@ plan_png(Req0, State) ->
     end,
     {Res, Req0, State}.
 
+create_plan(Req0, State) ->
+    {HeadersAndBody, Req1} = acc_multipart(Req0, []),
+    {Headers, Bodys} = lists:unzip(HeadersAndBody),
+    FormFields =
+    lists:map(fun cow_multipart:form_data/1, Headers),
+    ParsedForm = lists:zip(FormFields, Bodys),
+    NameBin = proplists:get_value({data, <<"name">>}, ParsedForm),
+    DescBin = proplists:get_value({data, <<"desc">>}, ParsedForm),
+    {value,{FileInfo,FileBin}} =
+    lists:search(fun({{file, <<"image">>, _Filename, _FileType},_Data}) -> true;
+                    (_) -> false
+                 end,
+                 ParsedForm),
+    CreateRes =
+    blue_scribe_plan_db:create_plan(FileBin,
+                                    binary_to_list(NameBin),
+                                    binary_to_list(DescBin)),
+    case CreateRes of
+        {ok, NewPlanId} ->
+            logger:notice("~p: Created new plan with id ~p", [?MODULE, NewPlanId]),
+            {true, Req1, State};
+        {error, Err} ->
+            logger:warning("~p: Plan not created because ~p", [?MODULE, Err]),
+            {false, Req1, State}
+    end.
+
+acc_multipart(Req0, Acc) ->
+    case cowboy_req:read_part(Req0) of
+        {ok, Headers, Req1} ->
+            {ok, Body, Req} = stream_body(Req1, <<>>),
+            acc_multipart(Req, [{Headers, Body}|Acc]);
+        {done, Req} ->
+            {lists:reverse(Acc), Req}
+    end.
+
+stream_body(Req0, Acc) ->
+    case cowboy_req:read_part_body(Req0) of
+        {more, Data, Req} ->
+            stream_body(Req, << Acc/binary, Data/binary >>);
+        {ok, Data, Req} ->
+            {ok, << Acc/binary, Data/binary >>, Req}
+    end.
