@@ -8,7 +8,7 @@
 -behaviour(supervisor).
 
 -export([start_link/0]).
--export([start_child/2]).
+-export([start_child/1]).
 
 -export([init/1]).
 
@@ -17,9 +17,9 @@
 start_link() ->
     supervisor:start_link({local, ?SERVER}, ?MODULE, []).
 
-start_child(Id, File) ->
+start_child(Id) ->
     io:format("Start child ~n"),
-    supervisor:start_child(?SERVER, [Id, File]).
+    supervisor:start_child(?SERVER, [Id]).
 
 %% sup_flags() = #{strategy => strategy(),         % optional
 %%                 intensity => non_neg_integer(), % optional

@@ -6,7 +6,7 @@
          get_plan_op_list/1, get_plan_preview_png/1,
          create_plan/3, update_plan_name/2,
          update_plan_notes/2, update_plan_op_list/2,
-         delete_plan/1]).
+         delete_plan/1, get_png_filename/1]).
 
 -record(blue_scribe_plan, {id :: non_neg_integer(),
                            name :: string(),
@@ -45,7 +45,7 @@ get_plan_notes(Id) ->
     mnesia:activity(transaction, F).
 
 -spec get_plan_op_list(Id :: non_neg_integer()) ->
-    {ok, string()} | {error, _}.
+    {ok, laser_plan()} | {error, _}.
 get_plan_op_list(Id) ->
     F = fun() ->
                 case mnesia:read({blue_scribe_plan, Id}) of
@@ -130,6 +130,10 @@ delete_plan(Id) ->
         end,
     mnesia:activity(transaction, F).
 
+-spec get_png_filename(Id :: non_neg_integer()) -> string().
+get_png_filename(Id) ->
+    do_get_png_filename(Id).
+
 install() ->
     mnesia:create_schema([node()]),
     application:start(mnesia),
@@ -151,6 +155,7 @@ do_make_id_(N) ->
             do_make_id_(N * 2)
     end.
 
+-spec do_get_png_filename(Id :: non_neg_integer()) -> string().
 do_get_png_filename(Id) ->
-    io_lib:format("plan_~8..0w.png", [Id]).
+    lists:flatten(io_lib:format("plan_~8..0w.png", [Id])).
 
