@@ -15,7 +15,10 @@
 
 -spec load_plan(Id :: non_neg_integer()) -> non_neg_integer() | {error,_}.
 load_plan(Id) ->
-    blue_scribe_plan_server_sup:start_child(Id).
+    case blue_scribe_plan_server_sup:start_child(Id) of
+        {ok, _Pid} -> {ok, Id};
+        Other -> Other
+    end.
 
 -spec get_plan(PlanId :: non_neg_integer()) ->
     {ok, _}|{error,_}.
