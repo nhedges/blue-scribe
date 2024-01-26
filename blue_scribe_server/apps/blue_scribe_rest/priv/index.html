@@ -8,7 +8,16 @@
                 html = html + "<td>";
                 html = html + "<p>" + plan.name + "</p>";
                 html = html + "<p>" + plan.desc + "</p>";
+                html = html + gen_burn_button(plan);
                 html = html + "</td></tr>";
+                return html;
+            }
+            function gen_burn_button(plan) {
+                var html = "<form action=\"/burner/start\" method=\"post\" enctype=\"multipart/form-data\">";
+                html = html + "<input type=\"hidden\" id=\"planId\" name=\"planId\" value=\"" + plan.id + "\">";
+                html = html + "<input type=\"range\" id=\"powerScale\" name=\"powerScale\" step=\"0.01\" min=\"0.0\" max=\"2.0\">";
+                html = html + "<input type=\"submit\" value=\"Start Burn\">";
+                html = html + "</form>";
                 return html;
             }
             function load_plans() {
