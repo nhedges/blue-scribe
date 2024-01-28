@@ -34,7 +34,7 @@ init([Id]) ->
     ImgCropped = blue_scribe_plan_image:do_crop_image(Img,?CROP_Y, ?CROP_X),
     Plan =
     case blue_scribe_plan_db:get_plan_op_list(Id) of
-        {ok, undefined} ->
+        {error, no_plan} ->
             NewPlan =
             blue_scribe_plan_image:do_image_to_plan(ImgCropped),
             blue_scribe_plan_db:update_plan_op_list(Id, NewPlan),

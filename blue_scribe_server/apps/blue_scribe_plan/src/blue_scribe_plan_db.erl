@@ -50,6 +50,8 @@ get_plan_op_list(Id) ->
     F = fun() ->
                 case mnesia:read({blue_scribe_plan, Id}) of
                     [] -> {error, not_found};
+                    [#blue_scribe_plan{op_list=undefined}] ->
+                        {error, no_plan};
                     [#blue_scribe_plan{op_list=Ops}] ->
                         {ok, Ops}
                 end
