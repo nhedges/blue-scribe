@@ -27,9 +27,16 @@ start_link() ->
 %%                  modules => modules()}   % optional
 init([]) ->
     SupFlags = #{strategy => one_for_all,
-                 intensity => 0,
-                 period => 1},
-    ChildSpecs = [],
+                 intensity => 5,
+                 period => 5},
+    BlueScribeLaser =
+    #{id => blue_scribe_laser,
+      start => {blue_scribe_laser, start_link, []},
+      restart => transient,
+      shutdown => 100,
+      type => worker,
+      modules => [blue_scribe_laser]},
+    ChildSpecs = [BlueScribeLaser],
     {ok, {SupFlags, ChildSpecs}}.
 
 %% internal functions
