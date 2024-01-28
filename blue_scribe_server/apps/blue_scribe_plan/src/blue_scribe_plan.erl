@@ -13,7 +13,7 @@
 -record(state,
         {plan}).
 
--spec load_plan(Id :: non_neg_integer()) -> non_neg_integer() | {error,_}.
+-spec load_plan(Id :: non_neg_integer()) -> {ok, non_neg_integer()} | {error,_}.
 load_plan(Id) ->
     case blue_scribe_plan_server_sup:start_child(Id) of
         {ok, _Pid} -> {ok, Id};
