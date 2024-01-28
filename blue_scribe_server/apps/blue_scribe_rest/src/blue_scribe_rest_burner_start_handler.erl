@@ -38,11 +38,11 @@ resource_exists(Req0, State) ->
             {false, undefined, undefined};
         {_,_} ->
             try {list_to_integer(binary_to_list(PlanIdBin)),
-                 list_to_float(binary_to_list(PowerScaleBin))} of
+                 parse_float(binary_to_list(PowerScaleBin))} of
                 {IdConv, PowerScaleConv} ->
                     {do_plan_exists(IdConv), IdConv, PowerScaleConv}
             catch
-                {badarg, _} ->
+                _:badarg ->
                     logger:warning("~p: Badarg parsing planId: "
                                    "~p or powerScale: ~p",
                                    [?MODULE, PlanIdBin, PowerScaleBin]),
@@ -67,6 +67,14 @@ to_html(Req0, #state{planId=Id, powerScale=PowerScale}=State) ->
 
 to_json(Req0, State) ->
     to_html(Req0, State).
+
+parse_float(FloatStr) ->
+    try list_to_float(FloatStr) of
+        Ok -> Ok
+    catch
+        _:badarg ->
+            list_to_float(FloatStr ++ ".0")
+    end.
 
 do_start_burn(Id, PowerScale) ->
     logger:info("~p: Got start burn; planid=~p powerScale=~p", [?MODULE, Id, PowerScale]),
