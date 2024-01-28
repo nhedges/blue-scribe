@@ -36,14 +36,7 @@ init([]) ->
       shutdown => 300,
       type => supervisor,
       modules => [blue_scribe_plan_server_sup]},
-    PlanId =
-    #{id => plan_id,
-      start => {plan_id, start_link, []},
-      restart => transient,
-      shutdown => 10,
-      type => worker,
-      modules => [plan_id]},
-    ChildSpecs = [PlanId, ServerSup],
+    ChildSpecs = [ServerSup],
     {ok, {SupFlags, ChildSpecs}}.
 
 %% internal functions
