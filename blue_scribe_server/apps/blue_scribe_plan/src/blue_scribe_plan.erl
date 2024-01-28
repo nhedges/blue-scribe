@@ -36,16 +36,15 @@ init([Id]) ->
     case blue_scribe_plan_db:get_plan_op_list(Id) of
         {ok, undefined} ->
             NewPlan =
-            blue_scribe_plan_image:do_image_to_plan(ImgCropped, 2.0),
+            blue_scribe_plan_image:do_image_to_plan(ImgCropped),
             blue_scribe_plan_db:update_plan_op_list(Id, NewPlan),
             NewPlan;
         {ok, CachedPlan} ->
             CachedPlan;
         {error, not_found} ->
             logger:error("~p: Error: plan ~p not found", [?MODULE, Id]),
-            blue_scribe_plan_image:do_image_to_plan(ImgCropped, 2.0)
+            blue_scribe_plan_image:do_image_to_plan(ImgCropped)
     end,
-    %TODO specify power scale instead of hardcode 2.0
     {ok, #state{plan=Plan}}.
 
 handle_call(get_plan, _From, #state{plan=Plan}=State) ->

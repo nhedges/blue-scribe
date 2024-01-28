@@ -2,7 +2,7 @@
 
 -on_load(init/0).
 
--export([do_load_png_file/1, do_count_mats/0, do_crop_image/3, do_png_encode/1, do_image_to_plan/2]).
+-export([do_load_png_file/1, do_count_mats/0, do_crop_image/3, do_png_encode/1, do_image_to_plan/1]).
 
 -include_lib("blue_scribe_burner/include/blue_scribe_burner.hrl").
 
@@ -53,6 +53,6 @@ do_png_encode(_) ->
 %% @doc Does a scan of the OpenCV Mat and turs it into laser operations.
 %% No optimization is done at this stage.
 %% -----------------------------------------------------------------------------
--spec do_image_to_plan(Mat :: image_mat(), PowerScale :: float()) -> laser_plan().
-do_image_to_plan(_,_) ->
+-spec do_image_to_plan(Mat :: image_mat()) -> laser_plan().
+do_image_to_plan(_) ->
     erlang:nif_error(nif_library_not_loaded).

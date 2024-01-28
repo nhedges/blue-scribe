@@ -152,12 +152,9 @@ ERL_NIF_TERM make_simple_laser_op(ErlNifEnv* env, ERL_NIF_TERM command, int star
 static ERL_NIF_TERM do_image_to_plan(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
 {
     CvImage* imageResource;
-    double laserScale = 0;
-    if (argc != 2)
+    if (argc != 1)
         return enif_make_badarg(env);
     if(!enif_get_resource(env, argv[0], matRt, (void**)&imageResource))
-        return enif_make_badarg(env);
-    if(!enif_get_double(env, argv[1], &laserScale))
         return enif_make_badarg(env);
 
     auto foundElement = matMap.find(imageResource->id);
@@ -195,7 +192,7 @@ static ERL_NIF_TERM do_image_to_plan(ErlNifEnv* env, int argc, const ERL_NIF_TER
                         make_laser_command(env,
                                 enif_make_atom(env, "BH"),
                                 (extend + 1)*MOTOR_SCALE,
-                                pixHere * laserScale);
+                                pixHere);
 
                     ERL_NIF_TERM burnOp =
                         make_simple_laser_op(env, burnCmd, c*MOTOR_SCALE, r*MOTOR_SCALE);
@@ -224,7 +221,7 @@ static ERL_NIF_TERM do_image_to_plan(ErlNifEnv* env, int argc, const ERL_NIF_TER
                         make_laser_command(env,
                                 enif_make_atom(env, "BH"),
                                 (extend - 1)*MOTOR_SCALE,
-                                pixHere * laserScale);
+                                pixHere);
 
                     ERL_NIF_TERM burnOp =
                         make_simple_laser_op(env, burnCmd, c*MOTOR_SCALE, r*MOTOR_SCALE);
@@ -242,7 +239,7 @@ static ErlNifFunc nif_funcs[] = {
     {"do_count_mats", 0, do_count_mats},
     {"do_crop_image", 3, do_crop_image},
     {"do_png_encode", 1, do_png_encode},
-    {"do_image_to_plan", 2, do_image_to_plan}
+    {"do_image_to_plan", 1, do_image_to_plan}
 };
 
 ERL_NIF_INIT(blue_scribe_plan_image, nif_funcs, load, NULL, NULL, NULL)
