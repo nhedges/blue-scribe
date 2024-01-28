@@ -1,7 +1,7 @@
 -module(blue_scribe_laser).
 -behaviour(gen_server).
 
--export([start_link/0, start_burn/1, home/0, corner_align_next/0, pause_burn/0,
+-export([start_link/0, start_burn/2, home/0, corner_align_next/0, pause_burn/0,
          resume_burn/0, stop/0]).
 
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2]).
@@ -18,11 +18,12 @@
                plan :: laser_plan() | corner_alignment | undefined,
                active_op :: laser_cmdop() | undefined,
                corner_alignment :: 0..3 | undefined,
+               powerScale=1.0 :: float(),
                paused = false :: boolean()}).
 
--spec start_burn(PlanId :: non_neg_integer()) -> ok | {error,_}.
-start_burn(PlanId) ->
-    gen_server:call(?MODULE, {start_burn, PlanId}).
+-spec start_burn(PlanId :: non_neg_integer(), PowerScale :: float()) -> ok | {error,_}.
+start_burn(PlanId, PowerScale) ->
+    gen_server:call(?MODULE, {start_burn, PlanId, PowerScale}).
 
 -spec home() -> ok | {error,_}.
 home() ->
@@ -54,7 +55,7 @@ init([]) ->
 handle_call(_, _From, #state{serial_pid=undefined}=State) ->
     {reply, {error, no_serial}, State};
 
-handle_call({start_burn, PlanId}, _From, #state{plan=undefined,
+handle_call({start_burn, PlanId, PowerScale}, _From, #state{plan=undefined,
                                                 active_op=undefined,
                                                 serial_pid=SerialPid,
                                                 corner_alignment=undefined}=State) ->
@@ -62,21 +63,23 @@ handle_call({start_burn, PlanId}, _From, #state{plan=undefined,
         {ok, Plan} ->
             {ActiveOp, RestPlan} =
             do_advance_plan(undefined, Plan),
-            do_run_op(ActiveOp, SerialPid),
+            do_run_op(ActiveOp, PowerScale, SerialPid),
             {reply, ok, State#state{plan=RestPlan,
-                                    active_op=ActiveOp}};
+                                    active_op=ActiveOp,
+                                    powerScale=PowerScale}};
         {error, Err} ->
             {reply, {error, Err}, State}
     end;
 
-handle_call({start_burn, _PlanId}, _From, State) ->
+handle_call({start_burn, _PlanId, _PowerScale}, _From, State) ->
     logger:warning("~p: Burn requested while busy. State: ~p", [?MODULE, State]),
     {reply, {error, busy}, State};
 
 handle_call(home, _From, #state{plan=undefined,
+                                powerScale=PowerScale,
                                 serial_pid=SerialPid,
                                 active_op=undefined}=State) ->
-    Res = do_run_op(#laser_command{class='HM', arg1=0, arg2=0}, SerialPid),
+    Res = do_run_op(#laser_command{class='HM', arg1=0, arg2=0}, PowerScale, SerialPid),
     {reply, Res, State};
 
 handle_call(home, _From, #state{plan=Plan}=State) ->
@@ -136,6 +139,7 @@ do_handle_serial_message(<<"Error\n\r">>, #state{active_op=Op}=State) ->
 do_handle_serial_message(<<"A\n\r">>, #state{plan=Plan,
                                              active_op=Op,
                                              serial_pid=SerialPid,
+                                             powerScale=PowerScale,
                                              paused=Paused}=State) ->
     logger:debug("~p: Command completed successfully: ~p",
                  [?MODULE, do_get_next_cmd(Op)]),
@@ -151,7 +155,7 @@ do_handle_serial_message(<<"A\n\r">>, #state{plan=Plan,
             logger:debug("~p: undefined next cmd", [?MODULE]),
             do_nothing;
         {_, Cmd} ->
-            ok = do_run_cmd(Cmd, SerialPid)
+            ok = do_run_cmd(Cmd, PowerScale, SerialPid)
     end,
     %TODO support pause/unpause?
     logger:debug("~p: New plan has ~p elements, active op = ~p",
@@ -213,22 +217,26 @@ do_load_new_op(#laser_operation{start_x=X, start_y=Y, commands=Cmds}=Op) ->
 %% @doc Run the next command or next command in an operation by sending it
 %% to the serial/uart process
 %% -----------------------------------------------------------------------------
--spec do_run_op(OpCmd :: laser_cmdop(), SerialPid :: pid()) ->
+-spec do_run_op(OpCmd :: laser_cmdop(),
+                PowerScale :: float(),
+                SerialPid :: pid()) ->
     ok | {error,_}.
-do_run_op(#laser_command{}=Cmd, Pid) ->
-    do_run_cmd(Cmd, Pid);
-do_run_op(#laser_operation{commands=[]}, _Pid) ->
+do_run_op(#laser_command{}=Cmd, PowerScale, Pid) ->
+    do_run_cmd(Cmd, PowerScale, Pid);
+do_run_op(#laser_operation{commands=[]}, _PowerScale, _Pid) ->
     logger:error("~p: do_run_op/1 Empty Op", [?MODULE]),
     {error, empty};
-do_run_op(#laser_operation{commands=[NextCmd | _]}, Pid) ->
-    do_run_cmd(NextCmd, Pid).
+do_run_op(#laser_operation{commands=[NextCmd | _]}, PowerScale, Pid) ->
+    do_run_cmd(NextCmd, PowerScale, Pid).
 
 %% -----------------------------------------------------------------------------
 %% @doc Send a laser command to the serial/uart process
 %% -----------------------------------------------------------------------------
--spec do_run_cmd(Cmd :: #laser_command{}, SerialPid :: pid()) -> ok | {error,_}.
-do_run_cmd(Cmd, Pid) ->
-    Bin = do_format_command(Cmd),
+-spec do_run_cmd(Cmd :: #laser_command{},
+                 PowerScale :: float(),
+                 SerialPid :: pid()) -> ok | {error,_}.
+do_run_cmd(Cmd, PowerScale, Pid) ->
+    Bin = do_format_command(do_scale_power(Cmd, PowerScale)),
     serial:send(Pid, Bin).
 
 -spec do_format_command(Cmd :: #laser_command{}) -> binary().
@@ -240,6 +248,21 @@ do_format_command(#laser_command{class=Class,
     Str = io_lib:format("~s ~p ~p\n\r",
                         [atom_to_list(Class), Arg1, Arg2]),
     list_to_binary(Str).
+
+%% -----------------------------------------------------------------------------
+%% @doc Scales the power parameter of a command up according to the power
+%% scale multiplier and rounds to integer.
+%% The maximum power value supported by hardware is not considered.
+%% Commands which don't have a power parameter are returned unchanged.
+%% -----------------------------------------------------------------------------
+-spec do_scale_power(Cmd :: #laser_command{}, PowerScale :: float()) -> #laser_command{}.
+do_scale_power(#laser_command{class='GO'}=Cmd, _) -> Cmd;
+do_scale_power(#laser_command{class='HM'}=Cmd, _) -> Cmd;
+do_scale_power(#laser_command{arg2=Power}=Cmd, Scale) ->
+    NewPower = round(Power * Scale),
+    Cmd#laser_command{arg2=NewPower}.
+
+
 
 -spec do_corner_alignment(CurrentCorner :: 0..3 | undefined) -> 0..3 | undefined.
 do_corner_alignment(undefined) ->

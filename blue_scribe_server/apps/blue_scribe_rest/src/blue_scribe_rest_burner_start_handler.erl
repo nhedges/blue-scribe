@@ -78,7 +78,7 @@ do_start_burn(Id, PowerScale) ->
         {error, OtherErr} ->
             logger:error("~p: ~p", [?MODULE, OtherErr])
     end,
-    case blue_scribe_laser:start_burn(Id) of
+    case blue_scribe_laser:start_burn(Id, PowerScale) of
         ok -> ok;
         {error, Err} ->
             logger:error("~p: Start burn: ~p", [?MODULE, Err]),
