@@ -132,6 +132,7 @@ ERL_NIF_TERM make_laser_command(ErlNifEnv* env, ERL_NIF_TERM laser_command_class
 
 ERL_NIF_TERM make_laser_op(ErlNifEnv* env, std::vector<ERL_NIF_TERM> commands, int startX, int startY)
 {
+    if (commands.size() == 0) return enif_make_badarg(env);
     return enif_make_tuple4(env,
             enif_make_atom(env, "laser_operation"),
             enif_make_int(env, startX),
@@ -231,6 +232,7 @@ static ERL_NIF_TERM do_image_to_plan(ErlNifEnv* env, int argc, const ERL_NIF_TER
             }
         }
     }
+    if (imageOps.size() == 0) return enif_make_badarg(env);
     return enif_make_list_from_array(env, (ERL_NIF_TERM*)&imageOps.at(0), imageOps.size());
 }
 
