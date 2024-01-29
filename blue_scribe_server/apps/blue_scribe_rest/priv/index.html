@@ -40,11 +40,53 @@
                 // Do something for an error here
             });
             }
+            function gen_pause_unpause_button(paused) {
+                var result = "";
+                var buttonTxt = "";
+                if (paused) {
+                    buttonTxt = "Unpause";
+                }
+                else
+                {
+                    buttonTxt = "Pause";
+                }
+                result = result + "<form action=\"/burner/status\" method=\"post\" enctype=\"multipart/form-data\" onsubmit=\"setTimeout(function () { window.location.reload(); }, 10)\">";
+                result = result + "<input type=\"hidden\" name=\"paused\" value=\"" + !paused + "\">";
+                result = result + "<input type=\"submit\" value=\"" + buttonTxt + "\">";
+                result = result + "</form>";
+                return result;
+            }
+            function load_status() {
+                console.log("loading status...");
+                var statusReport = "";
+                var apiUrl = 'burner/status';
+                fetch(apiUrl, {headers: {'Accept': 'application/json'}}).then(response => {
+                return response.json();
+            }).then(data => {
+                var newContent = "<table>";
+                newContent = newContent + "<tr><td>Paused:</td><td>" + data.paused.toString() + "</td></tr>";
+                newContent = newContent + "</table>";
+                newContent = newContent + gen_pause_unpause_button(data.paused);
+                console.log(newContent);
+                document.getElementById("status-report").innerHTML
+                = newContent;
+            }).catch(err => {
+                console.log("error: " + err);
+                // Do something for an error here
+            });
+            }
+            function on_load() {
+                load_status();
+                load_plans();
+            }
         </script>
     </head>
-    <body onload="load_plans()">
+    <body onload="on_load()">
         <h1>Laser Engraver Home</h1>
-        hello, here is some content
+        <h2>Status</h2>
+        <p id="status-report">
+        </p>
+        <h2>Plans</h2>
         <p id="plan-list">
             Loading plan list...
         </p>
