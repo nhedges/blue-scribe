@@ -35,11 +35,11 @@ corner_align_next() ->
 
 -spec pause_burn() -> ok | {error, _}.
 pause_burn() ->
-    gen_server:call(?MODULE, pause).
+    gen_server:call(?MODULE, pause_burn).
 
 -spec resume_burn() -> ok | {error, _}.
 resume_burn() ->
-    gen_server:call(?MODULE, resume).
+    gen_server:call(?MODULE, resume_burn).
 
 -spec stop() -> ok.
 stop() ->
@@ -101,11 +101,21 @@ handle_call(pause_burn, _From, #state{}=State) ->
     {reply, ok, State#state{paused=true}};
 
 handle_call(resume_burn, _From, #state{plan=undefined}=State) ->
-    {reply, {error, not_running}, State};
+    {reply, {error, no_plan}, State};
 
-handle_call(resume_burn, _From, #state{}=State) ->
-    %TODO do something to resume?
-    {reply, {error, not_implemented}, State#state{paused=false}};
+handle_call(resume_burn, _From, #state{paused=false}=State) ->
+    {reply, {error, not_paused}, State};
+
+handle_call(resume_burn, _From, #state{paused=true,
+                                       powerScale=PowerScale,
+                                       serial_pid=SerialPid,
+                                       plan=Plan}=State) ->
+    {ActiveOp, RestPlan} =
+    do_advance_plan(undefined, Plan),
+    do_run_op(ActiveOp, PowerScale, SerialPid),
+    {reply, ok, State#state{paused=false,
+                            plan=RestPlan,
+                            active_op=ActiveOp}};
 
 handle_call(Call, _, State) ->
     logger:warning("~p: Unknown call ~p", [?MODULE, Call]),
