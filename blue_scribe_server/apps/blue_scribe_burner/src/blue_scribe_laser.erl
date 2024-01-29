@@ -17,6 +17,7 @@
 -record(state,{serial_pid :: pid() | undefined,
                plan :: laser_plan() | corner_alignment | undefined,
                active_op :: laser_cmdop() | undefined,
+               opsCompleted = 0 :: non_neg_integer(),
                corner_alignment :: 0..3 | undefined,
                powerScale=1.0 :: float(),
                paused = false :: boolean()}).
@@ -70,6 +71,7 @@ handle_call({start_burn, PlanId, PowerScale}, _From, #state{plan=undefined,
             do_run_op(ActiveOp, PowerScale, SerialPid),
             {reply, ok, State#state{plan=RestPlan,
                                     active_op=ActiveOp,
+                                    opsCompleted=0,
                                     powerScale=PowerScale}};
         {error, Err} ->
             {reply, {error, Err}, State}
@@ -128,6 +130,7 @@ handle_call(status, _From, #state{plan=corner_alignment,
 
 handle_call(status, _From, #state{plan=Plan,
                                   powerScale=PowerScale,
+                                  opsCompleted=CompletedOps,
                                   paused=Paused}=State) ->
     OpsRemaining =
     if Plan == undefined -> 0;
@@ -136,7 +139,8 @@ handle_call(status, _From, #state{plan=Plan,
     Result =
     [{paused, atom_to_list(Paused)},
      {powerScale, float_to_list(PowerScale, [{decimals, 2}])},
-     {opsRemaining, integer_to_list(OpsRemaining)}],
+     {opsRemaining, integer_to_list(OpsRemaining)},
+     {opsCompleted, integer_to_list(CompletedOps)}],
     {reply, {ok, Result}, State};
 
 handle_call(Call, _, State) ->
@@ -170,6 +174,7 @@ do_handle_serial_message(<<"Error\n\r">>, #state{active_op=Op}=State) ->
     State;
 do_handle_serial_message(<<"A\n\r">>, #state{plan=Plan,
                                              active_op=Op,
+                                             opsCompleted=CompletedOps,
                                              serial_pid=SerialPid,
                                              powerScale=PowerScale,
                                              paused=Paused}=State) ->
@@ -195,7 +200,9 @@ do_handle_serial_message(<<"A\n\r">>, #state{plan=Plan,
                                true -> length(NewPlan);
                                false -> undefined
                            end, NewActiveOp]),
-    {ok, State#state{plan=NewPlan, active_op=NewActiveOp}}.
+    {ok, State#state{plan=NewPlan,
+                     active_op=NewActiveOp,
+                     opsCompleted=CompletedOps+1}}.
 
 -spec do_get_next_cmd(Op :: laser_cmdop()) -> #laser_command{} | undefined.
 do_get_next_cmd(#laser_command{}=Cmd) -> Cmd;
