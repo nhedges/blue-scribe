@@ -125,7 +125,7 @@ handle_call(resume_burn, _From, #state{paused=true,
 
 handle_call(status, _From, #state{plan=corner_alignment,
                                   corner_alignment=Corner}=State) ->
-    Result = [{corner, integer_to_list(Corner)}],
+    Result = [{corner, Corner}],
     {reply, {ok, Result}, State};
 
 handle_call(status, _From, #state{plan=Plan,
@@ -137,10 +137,10 @@ handle_call(status, _From, #state{plan=Plan,
        true -> length(Plan)
     end,
     Result =
-    [{paused, atom_to_list(Paused)},
-     {powerScale, float_to_list(PowerScale, [{decimals, 2}])},
-     {opsRemaining, integer_to_list(OpsRemaining)},
-     {opsCompleted, integer_to_list(CompletedOps)}],
+    [{paused, Paused},
+     {powerScale, PowerScale},
+     {opsRemaining, OpsRemaining},
+     {opsCompleted, CompletedOps}],
     {reply, {ok, Result}, State};
 
 handle_call(Call, _, State) ->
