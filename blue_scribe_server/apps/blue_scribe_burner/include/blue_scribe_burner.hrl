@@ -18,4 +18,9 @@
 
 -type serial_baud() :: 300|1200|4800|9600|19200|28800|38400|57600|115200.
 
+-type laser_status_field() :: powerScale | paused | planId | opsCompleted |
+                              opsRemaining | corner | serialConnected.
+-type laser_status() :: [{laser_status_field(), string()}].
+
+
 -endif.%?BLUE_SCRIBE_BURNER_HRL

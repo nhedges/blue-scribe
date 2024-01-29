@@ -2,7 +2,7 @@
 -behaviour(gen_server).
 
 -export([start_link/0, start_burn/2, home/0, corner_align_next/0, pause_burn/0,
-         resume_burn/0, stop/0]).
+         resume_burn/0, stop/0, status/0]).
 
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2]).
 
@@ -44,6 +44,10 @@ resume_burn() ->
 -spec stop() -> ok.
 stop() ->
     gen_server:stop(?MODULE).
+
+-spec status() -> {ok, laser_status()} | {error, _}.
+status() ->
+    gen_server:call(?MODULE, status).
 
 start_link() ->
     gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
@@ -116,6 +120,24 @@ handle_call(resume_burn, _From, #state{paused=true,
     {reply, ok, State#state{paused=false,
                             plan=RestPlan,
                             active_op=ActiveOp}};
+
+handle_call(status, _From, #state{plan=corner_alignment,
+                                  corner_alignment=Corner}=State) ->
+    Result = [{corner, integer_to_list(Corner)}],
+    {reply, {ok, Result}, State};
+
+handle_call(status, _From, #state{plan=Plan,
+                                  powerScale=PowerScale,
+                                  paused=Paused}=State) ->
+    OpsRemaining =
+    if Plan == undefined -> 0;
+       true -> length(Plan)
+    end,
+    Result =
+    [{paused, atom_to_list(Paused)},
+     {powerScale, float_to_list(PowerScale, [{decimals, 2}])},
+     {opsRemaining, integer_to_list(OpsRemaining)}],
+    {reply, {ok, Result}, State};
 
 handle_call(Call, _, State) ->
     logger:warning("~p: Unknown call ~p", [?MODULE, Call]),
