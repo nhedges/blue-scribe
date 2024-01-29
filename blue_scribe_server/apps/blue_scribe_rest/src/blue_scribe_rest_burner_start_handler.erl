@@ -6,7 +6,7 @@
 
 -record(state, {planId, powerScale}).
 
-init(Req0, State) ->
+init(Req0, _State) ->
     {cowboy_rest, Req0, #state{}}.
 
 allowed_methods(Req0, State) ->
