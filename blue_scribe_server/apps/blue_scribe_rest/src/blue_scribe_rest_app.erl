@@ -14,6 +14,7 @@ start(_StartType, _StartArgs) ->
                  [{'_', [{"/plan/[...]", blue_scribe_rest_plan_handler, []},
                          {"/burner/start/[...]", blue_scribe_rest_burner_start_handler, []},
                          {"/burner/status/[...]", blue_scribe_rest_burner_status_handler, []},
+                         {"/", cowboy_static, {priv_file, blue_scribe_rest, "index.html"}},
                          {"/[...]", cowboy_static, {priv_dir,
                                                     blue_scribe_rest,
                                                     "",
