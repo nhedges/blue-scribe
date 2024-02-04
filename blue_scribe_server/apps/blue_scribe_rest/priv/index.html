@@ -41,6 +41,14 @@
                 // Do something for an error here
             });
             }
+            function reload_pause_button(){
+                var container = document.getElementById("pause-unpause-form");
+                var content = container.innerHTML;
+                container.innerHTML= content;
+
+               //this line is to watch the result in console , you can remove it later
+                console.log("Refreshed");
+            }
             function gen_pause_unpause_button(paused) {
                 var result = "";
                 var buttonTxt = "";
@@ -51,7 +59,7 @@
                 {
                     buttonTxt = "Pause";
                 }
-                result = result + "<form action=\"/burner/status\" method=\"post\" enctype=\"multipart/form-data\" onsubmit=\"setTimeout(function () { window.location.reload(); }, 10)\">";
+                result = result + "<form id=\"pause-unpause-form\" action=\"/burner/status\" method=\"post\" enctype=\"multipart/form-data\" onsubmit=\"setTimeout(function(){load_status();}, 200);\">";
                 result = result + "<input type=\"hidden\" name=\"paused\" value=\"" + !paused + "\">";
                 result = result + "<input type=\"submit\" value=\"" + buttonTxt + "\">";
                 result = result + "</form>";
@@ -61,7 +69,7 @@
                 console.log("loading status...");
                 var statusReport = "";
                 var apiUrl = 'burner/status';
-                fetch(apiUrl, {headers: {'Accept': 'application/json'}}).then(response => {
+                fetch(apiUrl, {headers: {'Accept': 'application/json'}, cache: "no-store"}).then(response => {
                 return response.json();
             }).then(data => {
                 var newContent = "<table>";
@@ -70,7 +78,7 @@
                 newContent = newContent + gen_pause_unpause_button(data.paused);
                 console.log(newContent);
                 document.getElementById("status-report").innerHTML
-                = document.getElementById("status-report").innerHTML + newContent;
+                = newContent;
             }).catch(err => {
                 console.log("error: " + err);
                 // Do something for an error here
@@ -85,7 +93,8 @@
     <body onload="on_load()">
         <h1>Laser Engraver Home</h1>
         <h2>Status</h2>
-        <p id="status-report">
+        <p>
+            <div id="status-report"></div>
             <form action="/burner/status" method="post" enctype="multipart/form-data">
                 <input type="hidden" name="home" value="true">
                 <input type="submit" id="home-button" value="Re-align">
