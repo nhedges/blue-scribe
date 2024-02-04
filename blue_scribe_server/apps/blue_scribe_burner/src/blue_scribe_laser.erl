@@ -86,7 +86,9 @@ handle_call(home, _From, #state{plan=undefined,
                                 serial_pid=SerialPid,
                                 active_op=undefined}=State) ->
     Res = do_run_op(#laser_command{class='HM', arg1=0, arg2=0}, PowerScale, SerialPid),
-    {reply, Res, State};
+    Op = #laser_command{class='HM', arg1=0, arg2=0},
+    NewPlan = [],
+    {reply, Res, State#state{plan=NewPlan, active_op=Op}};
 
 handle_call(home, _From, #state{plan=Plan}=State) ->
     NewPlan = [#laser_command{class='HM', arg1=0, arg2=0} | Plan],
