@@ -61,6 +61,8 @@ modify_status(Req0, State) ->
               blue_scribe_laser:pause_burn();
          ({{data, <<"paused">>}, <<"false">>}) ->
               blue_scribe_laser:resume_burn();
+         ({{data, <<"home">>}, <<"true">>}) ->
+              blue_scribe_laser:home();
          (Other) ->
               logger:warning("~p: Unknown field ~p", [?MODULE, Other])
       end,

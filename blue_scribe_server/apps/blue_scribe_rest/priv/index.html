@@ -69,7 +69,7 @@
                 newContent = newContent + gen_pause_unpause_button(data.paused);
                 console.log(newContent);
                 document.getElementById("status-report").innerHTML
-                = newContent;
+                = document.getElementById("status-report").innerHTML + newContent;
             }).catch(err => {
                 console.log("error: " + err);
                 // Do something for an error here
@@ -85,6 +85,10 @@
         <h1>Laser Engraver Home</h1>
         <h2>Status</h2>
         <p id="status-report">
+            <form action="/burner/status" method="post" enctype="multipart/form-data">
+                <input type="hidden" name="home" value="true">
+                <input type="submit" value="Re-align">
+            </form>
         </p>
         <h2>Plans</h2>
         <p id="plan-list">
