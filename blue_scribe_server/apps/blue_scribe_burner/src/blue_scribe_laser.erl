@@ -2,7 +2,7 @@
 -behaviour(gen_server).
 
 -export([start_link/0, start_burn/2, home/0, corner_align_next/0, pause_burn/0,
-         resume_burn/0, stop/0, status/0]).
+         resume_burn/0, cancel_burn/0, stop/0, status/0]).
 
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2]).
 
@@ -41,6 +41,10 @@ pause_burn() ->
 -spec resume_burn() -> ok | {error, _}.
 resume_burn() ->
     gen_server:call(?MODULE, resume_burn).
+
+-spec cancel_burn() -> ok | {error, _}.
+cancel_burn() ->
+    gen_server:call(?MODULE, cancel_burn).
 
 -spec stop() -> ok.
 stop() ->
@@ -124,6 +128,18 @@ handle_call(resume_burn, _From, #state{paused=true,
     {reply, ok, State#state{paused=false,
                             plan=RestPlan,
                             active_op=ActiveOp}};
+
+handle_call(cancel_burn, _From, #state{powerScale=PowerScale,
+                                       serial_pid=SerialPid,
+                                       plan=Plan}=State) ->
+    logger:info("~p: Cancelling burn", [?MODULE]),
+    Op = #laser_command{class='HM', arg1=0, arg2=0},
+    Res = case Plan of
+              undefined -> do_run_op(#laser_command{class='HM', arg1=0, arg2=0}, PowerScale, SerialPid);
+              _ -> ok
+          end,
+    NewPlan = [],
+    {reply, ok, State#state{active_op=Op, plan=NewPlan}};
 
 handle_call(status, _From, #state{plan=corner_alignment,
                                   corner_alignment=Corner}=State) ->

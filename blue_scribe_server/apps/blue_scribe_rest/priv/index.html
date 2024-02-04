@@ -89,6 +89,10 @@
                 <input type="hidden" name="home" value="true">
                 <input type="submit" value="Re-align">
             </form>
+            <form action="/burner/status" method="post" enctype="multipart/form-data">
+                <input type="hidden" name="cancel" value="true">
+                <input type="submit" value="Cancel">
+            </form>
         </p>
         <h2>Plans</h2>
         <p id="plan-list">
