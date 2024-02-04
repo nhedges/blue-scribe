@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html>
     <head>
+        <link rel="stylesheet" href="default.css">
         <script>
             function gen_plan_preview(plan) {
                 var html = "";
@@ -16,7 +17,7 @@
                 var html = "<form action=\"/burner/start\" method=\"post\" enctype=\"multipart/form-data\">";
                 html = html + "<input type=\"hidden\" id=\"planId\" name=\"planId\" value=\"" + plan.id + "\">";
                 html = html + "<input type=\"range\" id=\"powerScale\" name=\"powerScale\" step=\"0.01\" min=\"0.0\" max=\"2.0\">";
-                html = html + "<input type=\"submit\" value=\"Start Burn\">";
+                html = html + "<input type=\"submit\" id=\"burn-button\" value=\"Start Burn\">";
                 html = html + "</form>";
                 return html;
             }
@@ -87,11 +88,11 @@
         <p id="status-report">
             <form action="/burner/status" method="post" enctype="multipart/form-data">
                 <input type="hidden" name="home" value="true">
-                <input type="submit" value="Re-align">
+                <input type="submit" id="home-button" value="Re-align">
             </form>
             <form action="/burner/status" method="post" enctype="multipart/form-data" onsubmit="return confirm('Cancel burn? (Cannot be undone)');">
                 <input type="hidden" name="cancel" value="true">
-                <input type="submit" value="Cancel">
+                <input type="submit" id="cancel-button" value="Cancel">
             </form>
         </p>
         <h2>Plans</h2>
@@ -106,7 +107,7 @@
                 <input type="file" name="image" accept=".png"><br>
                 <label for="desc">Plan Description:</label><br>
                 <textarea cols="40", rows="10", name="desc"></textarea><br>
-                <input type="submit" value="Create">
+                <input type="submit" id="create-button" value="Create">
             </fieldset>
         </form>
     </body>

@@ -1,0 +1,54 @@
+body {
+    background-color: darkgray;
+    text-color: white;
+}
+
+h1 {
+    font-family:helvetica;
+    font-size:75px;
+    font-style:bold;
+    text-color: white;
+}
+
+h2 {
+    font-family:helvetica;
+    font-size:30px;
+    text-color: white;
+}
+
+p {
+    font-family: helvetica;
+    font-size: 20px;
+    text-color: white;
+}
+
+input{
+  background-color: #3a3a3a;
+  color: white;
+}
+
+input[type=submit]{
+    font-size: 25px;
+}
+
+input[id="create-button"]{
+    background-color: #17a877;
+}
+
+input[id="cancel-button"]{
+    background-color: #c3300c;
+}
+
+input[id="burn-button"]{
+    background-color: #068d81;
+}
+
+input[id="home-button"]{
+    background-color: #868d00;
+}
+
+
+textarea{
+  background-color: #3a3a3a;
+  color: white;
+}
