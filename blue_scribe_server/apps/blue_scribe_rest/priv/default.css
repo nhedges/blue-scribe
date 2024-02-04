@@ -31,6 +31,10 @@ input[type=submit]{
     font-size: 25px;
 }
 
+input[type=range]{
+    width: 600px;
+}
+
 input[id="create-button"]{
     background-color: #17a877;
 }
