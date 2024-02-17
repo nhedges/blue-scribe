@@ -5,7 +5,8 @@
   {mod, {blue_scribe_plan_app, []}},
   {applications,
    [kernel,
-    stdlib
+    stdlib,
+    mnesia
    ]},
   {env,[]},
   {modules, []},

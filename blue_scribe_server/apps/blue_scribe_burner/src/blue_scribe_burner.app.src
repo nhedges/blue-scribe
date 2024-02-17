@@ -5,7 +5,8 @@
   {mod, {blue_scribe_burner_app, []}},
   {applications,
    [kernel,
-    stdlib
+    stdlib,
+    'erlang-serial'
    ]},
   {env,[]},
   {modules, []},

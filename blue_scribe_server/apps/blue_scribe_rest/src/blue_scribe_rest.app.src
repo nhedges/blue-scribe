@@ -5,7 +5,9 @@
   {mod, {blue_scribe_rest_app, []}},
   {applications,
    [kernel,
-    stdlib
+    stdlib,
+    cowboy,
+    jiffy
    ]},
   {env,[]},
   {modules, []},
