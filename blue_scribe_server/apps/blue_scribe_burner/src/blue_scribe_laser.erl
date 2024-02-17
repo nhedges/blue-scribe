@@ -131,15 +131,11 @@ handle_call(resume_burn, _From, #state{paused=true,
 
 handle_call(cancel_burn, _From, #state{powerScale=PowerScale,
                                        serial_pid=SerialPid,
-                                       plan=Plan}=State) ->
+                                       plan=_Plan}=State) ->
     logger:info("~p: Cancelling burn", [?MODULE]),
     Op = #laser_command{class='HM', arg1=0, arg2=0},
-    Res = case Plan of
-              undefined -> do_run_op(#laser_command{class='HM', arg1=0, arg2=0}, PowerScale, SerialPid);
-              _ -> ok
-          end,
-    NewPlan = [],
-    {reply, ok, State#state{active_op=Op, plan=NewPlan}};
+    Res = do_run_op(Op, PowerScale, SerialPid),
+    {reply, Res, State#state{active_op=undefined, plan=undefined}};
 
 handle_call(status, _From, #state{plan=corner_alignment,
                                   corner_alignment=Corner}=State) ->
@@ -241,6 +237,8 @@ do_advance_plan(#laser_operation{commands=CmdList}, []) when is_list(CmdList) an
                                                              length(CmdList) =< 1 ->
     {undefined, undefined};
 do_advance_plan(undefined, []) ->
+    {undefined, undefined};
+do_advance_plan(undefined, undefined) ->
     {undefined, undefined};
 do_advance_plan(#laser_command{}, [NextOp | ReducedPlan]) ->
     % just advance, laser command is singular
