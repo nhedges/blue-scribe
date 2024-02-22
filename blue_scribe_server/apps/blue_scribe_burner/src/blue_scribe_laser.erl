@@ -135,7 +135,7 @@ handle_call(cancel_burn, _From, #state{powerScale=PowerScale,
     logger:info("~p: Cancelling burn", [?MODULE]),
     Op = #laser_command{class='HM', arg1=0, arg2=0},
     Res = do_run_op(Op, PowerScale, SerialPid),
-    {reply, Res, State#state{active_op=undefined, plan=undefined}};
+    {reply, Res, State#state{paused=false, active_op=undefined, plan=undefined}};
 
 handle_call(status, _From, #state{plan=corner_alignment,
                                   corner_alignment=Corner}=State) ->

@@ -88,6 +88,14 @@
                 load_status();
                 load_plans();
             }
+            function cancel_button_press() {
+                var submit = confirm('Cancel burn? (Cannot be undone)');
+                if (submit)
+                {
+                    setTimeout(function() {load_status();}, 10);
+                }
+                return submit;
+            }
         </script>
     </head>
     <body onload="on_load()">
@@ -99,7 +107,7 @@
                 <input type="hidden" name="home" value="true">
                 <input type="submit" id="home-button" value="Re-align">
             </form>
-            <form action="/burner/status" method="post" enctype="multipart/form-data" onsubmit="return confirm('Cancel burn? (Cannot be undone)');">
+            <form action="/burner/status" method="post" enctype="multipart/form-data" onsubmit="return cancel_button_press();">
                 <input type="hidden" name="cancel" value="true">
                 <input type="submit" id="cancel-button" value="Cancel">
             </form>
