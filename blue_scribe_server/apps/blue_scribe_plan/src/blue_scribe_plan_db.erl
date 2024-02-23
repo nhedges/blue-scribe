@@ -6,11 +6,15 @@
          get_plan_op_list/1, get_plan_preview_png/1,
          create_plan/3, update_plan_name/2,
          update_plan_notes/2, update_plan_op_list/2,
+         increment_plan_start_counter/1,
+         increment_plan_finish_counter/1,
          delete_plan/1, get_png_filename/1]).
 
 -record(blue_scribe_plan, {id :: non_neg_integer(),
                            name :: string(),
                            notes :: string(),
+                           started_count = 0 :: non_neg_integer(),
+                           completed_count = 0 :: non_neg_integer(),
                            op_list :: laser_plan() | undefined}).
 
 -spec get_all_plan_ids() -> [non_neg_integer()].
@@ -114,6 +118,28 @@ update_plan_op_list(Id, OpList) ->
                     [] -> {error, not_found};
                     [#blue_scribe_plan{}=Rec] ->
                         mnesia:write(Rec#blue_scribe_plan{op_list=OpList})
+                end
+        end,
+    mnesia:activity(transaction, F).
+
+-spec increment_plan_start_counter(Id :: non_neg_integer()) -> ok | {error, _}.
+increment_plan_start_counter(Id) ->
+    F = fun() ->
+                case mnesia:read({blue_scribe_plan, Id}) of
+                    [] -> {error, not_found};
+                    [#blue_scribe_plan{started_count=Sc}=Rec] ->
+                        mnesia:write(Rec#blue_scribe_plan{started_count=Sc+1})
+                end
+        end,
+    mnesia:activity(transaction, F).
+
+-spec increment_plan_finish_counter(Id :: non_neg_integer()) -> ok | {error, _}.
+increment_plan_finish_counter(Id) ->
+    F = fun() ->
+                case mnesia:read({blue_scribe_plan, Id}) of
+                    [] -> {error, not_found};
+                    [#blue_scribe_plan{completed_count=Cc}=Rec] ->
+                        mnesia:write(Rec#blue_scribe_plan{completed_count=Cc+1})
                 end
         end,
     mnesia:activity(transaction, F).

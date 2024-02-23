@@ -15,6 +15,7 @@
 -endif.%TEST
 
 -record(state,{serial_pid :: pid() | undefined,
+               planId :: non_neg_integer() | undefined,
                plan :: laser_plan() | corner_alignment | undefined,
                active_op :: laser_cmdop() | undefined,
                opsCompleted = 0 :: non_neg_integer(),
@@ -70,10 +71,12 @@ handle_call({start_burn, PlanId, PowerScale}, _From, #state{plan=undefined,
                                                 corner_alignment=undefined}=State) ->
     case blue_scribe_plan:get_plan(PlanId) of
         {ok, Plan} ->
+            blue_scribe_plan_db:increment_plan_start_counter(PlanId),
             {ActiveOp, RestPlan} =
             do_advance_plan(undefined, Plan),
             do_run_op(ActiveOp, PowerScale, SerialPid),
             {reply, ok, State#state{plan=RestPlan,
+                                    planId=PlanId,
                                     active_op=ActiveOp,
                                     opsCompleted=0,
                                     powerScale=PowerScale}};
@@ -187,6 +190,7 @@ do_handle_serial_message(<<"Error\n\r">>, #state{active_op=Op}=State) ->
                  "Active op: ~p", [?MODULE, Op]),
     State;
 do_handle_serial_message(<<"A\n\r">>, #state{plan=Plan,
+                                             planId=PlanId,
                                              active_op=Op,
                                              opsCompleted=CompletedOps,
                                              serial_pid=SerialPid,
@@ -208,12 +212,17 @@ do_handle_serial_message(<<"A\n\r">>, #state{plan=Plan,
         {_, Cmd} ->
             ok = do_run_cmd(Cmd, PowerScale, SerialPid)
     end,
-    %TODO support pause/unpause?
     logger:debug("~p: New plan has ~p elements, active op = ~p",
                  [?MODULE, case is_list(NewPlan) of
                                true -> length(NewPlan);
                                false -> undefined
                            end, NewActiveOp]),
+    case {Op, NewActiveOp, NewPlan} of % increment if the plan is finishing (not cancelled)
+        {AO, undefined, undefined} when AO =/= undefined ->
+            logger:debug("~p: Incremeting plan counter for ~p", [?MODULE, PlanId]),
+            blue_scribe_plan_db:increment_plan_finish_counter(PlanId);
+        _ -> ok
+    end,
     {ok, State#state{plan=NewPlan,
                      active_op=NewActiveOp,
                      opsCompleted=CompletedOps+1}}.
