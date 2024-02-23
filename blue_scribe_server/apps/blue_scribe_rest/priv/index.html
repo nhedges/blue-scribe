@@ -96,6 +96,9 @@
                 }
                 return submit;
             }
+            function create_button_press() {
+                return setTimeout(function() {load_plans();}, 10);
+            }
         </script>
     </head>
     <body onload="on_load()">
@@ -116,7 +119,7 @@
         <p id="plan-list">
             Loading plan list...
         </p>
-        <form action="/plan/new" method="post" enctype="multipart/form-data" onsubmit="setTimeout(function () { window.location.reload(); }, 10)">
+        <form action="/plan/new" method="post" enctype="multipart/form-data" onsubmit="return create_button_press();">
             <fieldset>
                 <legend>New Plan</legend>
                 <label for="name">Plan name:</label><br>
