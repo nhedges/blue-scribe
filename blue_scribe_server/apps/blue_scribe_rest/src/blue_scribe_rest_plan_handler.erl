@@ -67,27 +67,27 @@ plan_html(Req0, State) ->
 plan_json(Req0, State) ->
     Res =
     case cowboy_req:qs(Req0) of
+        <<"some">> ->
+            Ids = blue_scribe_plan_db:select_popular_plans(20),
+            Plans = lists:map(fun do_json_ready_plan/1, Ids),
+            jiffy:encode(Plans);
         <<"all">> ->
             Ids = blue_scribe_plan_db:get_all_plan_ids(),
             Plans =
-            lists:map(fun(Id) ->
-                              {ok, Name} = blue_scribe_plan_db:get_plan_name(Id),
-                              {ok, Desc} = blue_scribe_plan_db:get_plan_notes(Id),
-                              {[{<<"id">>, Id},
-                                {<<"name">>, list_to_binary(Name)},
-                                {<<"desc">>, list_to_binary(Desc)}]}
-                      end,
-                      Ids),
+            lists:map(fun do_json_ready_plan/1, Ids),
             jiffy:encode(Plans);
         <<"id=", IdBin/binary>> ->
             Id = list_to_integer(binary_to_list(IdBin)),
-            {ok, Name} = blue_scribe_plan_db:get_plan_name(Id),
-            {ok, Desc} = blue_scribe_plan_db:get_plan_notes(Id),
-            jiffy:encode({[{<<"id">>, Id},
-                           {<<"name">>, list_to_binary(Name)},
-                           {<<"desc">>, list_to_binary(Desc)}]})
+            jiffy:encode(do_json_ready_plan(Id))
     end,
     {Res, Req0, State}.
+
+do_json_ready_plan(PlanId) ->
+    {ok, Name} = blue_scribe_plan_db:get_plan_name(PlanId),
+    {ok, Desc} = blue_scribe_plan_db:get_plan_notes(PlanId),
+    {[{<<"id">>, PlanId},
+      {<<"name">>, list_to_binary(Name)},
+      {<<"desc">>, list_to_binary(Desc)}]}.
 
 plan_png(Req0, State) ->
     Res =

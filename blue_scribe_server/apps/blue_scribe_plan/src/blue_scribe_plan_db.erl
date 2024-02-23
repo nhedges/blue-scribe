@@ -8,6 +8,7 @@
          update_plan_notes/2, update_plan_op_list/2,
          increment_plan_start_counter/1,
          increment_plan_finish_counter/1,
+         select_popular_plans/1,
          delete_plan/1, get_png_filename/1]).
 
 -record(blue_scribe_plan, {id :: non_neg_integer(),
@@ -143,6 +144,39 @@ increment_plan_finish_counter(Id) ->
                 end
         end,
     mnesia:activity(transaction, F).
+
+%% -----------------------------------------------------------------------------
+%% @doc Provide a sorted list of up to the N most popular plans, based on the
+%% number of completions, secondarily the number of starts.
+%% The result is sorted most popular to least popular plan IDs.
+%% -----------------------------------------------------------------------------
+-spec select_popular_plans(Count :: non_neg_integer()) -> [non_neg_integer()].
+select_popular_plans(Count) ->
+    SelectTop =
+    fun(#blue_scribe_plan{id=Id,
+                          completed_count=Cc,
+                          started_count=Sc},
+        {LLSize, LLMin, LeaderList}) ->
+            if
+                LLSize < Count ->
+                    NewList = lists:sort([{Cc, Sc, Id} | LeaderList]),
+                    [{NewMin, _, _} | _] = NewList,
+                    {LLSize+1, NewMin, NewList};
+                Cc >= LLMin ->
+                    NewList1 = lists:sort([{Cc, Sc, Id} | LeaderList]),
+                    [_ | NewList2] = NewList1,
+                    [{NewMin, _, _} | _] = NewList2,
+                    {LLSize, NewMin, NewList2};
+                true ->
+                    {LLSize, LLMin, LeaderList}
+            end
+    end,
+    F = fun() ->
+                mnesia:foldl(SelectTop, {0, 0, []}, blue_scribe_plan)
+        end,
+    {_, _, ChosenPlanTuples} = mnesia:activity(transaction, F),
+    {_Cc, _Sc, Ids} = lists:unzip3(ChosenPlanTuples),
+    lists:reverse(Ids).
 
 -spec delete_plan(Id :: non_neg_integer()) ->
     ok | {error, _}.

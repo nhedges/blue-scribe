@@ -22,7 +22,7 @@
                 return html;
             }
             function load_plans() {
-                var apiUrl = 'plan?all';
+                var apiUrl = 'plan?some';
                 fetch(apiUrl, {headers: {'Accept': 'application/json'}}).then(response => {
                 return response.json();
             }).then(data => {
