@@ -74,7 +74,7 @@ plan_json(Req0, State) ->
         <<"all">> ->
             Ids = blue_scribe_plan_db:get_all_plan_ids(),
             Plans =
-            lists:map(fun do_json_ready_plan/1, Ids),
+            lists:map(fun do_json_ready_plan/1, lists:sort(Ids)),
             jiffy:encode(Plans);
         <<"id=", IdBin/binary>> ->
             Id = list_to_integer(binary_to_list(IdBin)),
