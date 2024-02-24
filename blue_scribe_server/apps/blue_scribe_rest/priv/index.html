@@ -21,8 +21,8 @@
                 html = html + "</form>";
                 return html;
             }
-            function load_plans() {
-                var apiUrl = 'plan?some';
+            function load_plans(path) {
+                var apiUrl = 'plan?' + path;
                 fetch(apiUrl, {headers: {'Accept': 'application/json'}}).then(response => {
                 return response.json();
             }).then(data => {
@@ -34,6 +34,8 @@
                     newContent = newContent + gen_plan_preview(data[i]);
                 }
                 newContent = newContent + "</table>";
+                newContent = newContent +
+                    "<form id=\"load-all-button\" method=\"post\" onsubmit=\"return load_all_button_press();\"><input type=\"submit\" value=\"Load All\"></form>";
                 console.log(newContent);
                 document.getElementById("plan-list").innerHTML
                 = newContent;
@@ -86,7 +88,7 @@
             }
             function on_load() {
                 load_status();
-                load_plans();
+                load_plans('some');
             }
             function cancel_button_press() {
                 var submit = confirm('Cancel burn? (Cannot be undone)');
@@ -97,7 +99,11 @@
                 return submit;
             }
             function create_button_press() {
-                return setTimeout(function() {load_plans();}, 10);
+                return setTimeout(function() {load_plans('some');}, 10);
+            }
+            function load_all_button_press() {
+                setTimeout(function() {load_plans('all');}, 10);
+                return false;
             }
         </script>
     </head>
