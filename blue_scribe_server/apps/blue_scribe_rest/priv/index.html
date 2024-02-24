@@ -11,6 +11,7 @@
                 html = html + "<p>" + plan.desc + "</p>";
                 html = html + "<p>(" + plan.width + " x " + plan.height + ")</p>";
                 html = html + gen_burn_button(plan);
+                html = html + gen_delete_button(plan.id);
                 html = html + "</td></tr>";
                 return html;
             }
@@ -20,6 +21,11 @@
                 html = html + "<input type=\"range\" id=\"powerScale\" name=\"powerScale\" step=\"0.01\" min=\"0.0\" max=\"2.0\">";
                 html = html + "<input type=\"submit\" id=\"burn-button\" value=\"Start Burn\">";
                 html = html + "</form>";
+                return html;
+            }
+            function gen_delete_button(plan) {
+                var html =
+                    "<form id=\"delete-" + plan + "\" method=\"post\" onsubmit=\"return delete_button_press(" + plan + ");\"><input type=\"submit\" value=\"Delete\"></form>";
                 return html;
             }
             function load_plans(path) {
@@ -43,6 +49,21 @@
             }).catch(err => {
                 // Do something for an error here
             });
+            }
+            function delete_button_press(id) {
+                var submit = confirm('Delete plan? (Cannot be undone)');
+                if (submit)
+                {
+                    var apiUrl = 'plan?planId=' + id;
+                    setTimeout(function() {fetch(apiUrl, {method: 'DELETE'});}, 10);
+                    setTimeout(function() {load_plans('some');}, 20);
+                }
+                return false;
+            }
+            function delete_plan(id){
+                var apiUrl = 'plan?' + id;
+                fetch(apiUrl, {method: 'DELETE'});
+                return false;
             }
             function reload_pause_button(){
                 var container = document.getElementById("pause-unpause-form");

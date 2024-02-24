@@ -1,7 +1,7 @@
 -module(blue_scribe_rest_plan_handler).
 
--export([init/2, allowed_methods/2, content_types_provided/2,
-         content_types_accepted/2]).
+-export([init/2, resource_exists/2, allowed_methods/2, content_types_provided/2,
+         content_types_accepted/2, delete_resource/2]).
 -export([plan_text/2, plan_html/2, plan_json/2, plan_png/2, create_plan/2]).
 
 
@@ -11,6 +11,34 @@ init(Req0, State) ->
 
 allowed_methods(Req0, State) ->
     {[<<"GET">>, <<"POST">>, <<"DELETE">>], Req0, State}.
+
+resource_exists(Req0, State) ->
+    case cowboy_req:qs(Req0) of
+        <<"planId=",IdStr/binary>> ->
+            try list_to_integer(binary_to_list(IdStr)) of
+                Id ->
+                    case blue_scribe_plan_db:get_plan_notes(Id) of
+                        {ok,_} -> {true, Req0, Id};
+                        {error,_} -> {false, Req0, Id}
+                    end
+            catch
+                {badarg, _} ->
+                    {false, Req0, State}
+            end;
+        _ -> {true, Req0, State}
+    end.
+
+delete_resource(Req0, State) ->
+    case State of
+        Id when is_integer(Id) ->
+            case blue_scribe_plan_db:delete_plan(Id) of
+                ok -> {true, Req0, State};
+                {error,_} -> {false, Req0, State}
+            end;
+        Other ->
+            logger:warning("~p: Delete failed: ~p, ~p", [?MODULE, Req0, State]),
+            {false, Req0, State}
+    end.
 
 content_types_provided(Req0, State) ->
     Types = case cowboy_req:path_info(Req0) of
