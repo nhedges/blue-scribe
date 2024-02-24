@@ -2,7 +2,7 @@
 
 -on_load(init/0).
 
--export([do_load_png_file/1, do_count_mats/0, do_crop_image/3, do_png_encode/1, do_image_to_plan/1]).
+-export([do_load_png_file/1, do_count_mats/0, do_get_dimensions/1, do_crop_image/3, do_png_encode/1, do_image_to_plan/1]).
 
 -include_lib("blue_scribe_burner/include/blue_scribe_burner.hrl").
 
@@ -40,6 +40,11 @@ do_count_mats() ->
                     Height :: non_neg_integer(),
                     Width :: non_neg_integer()) -> image_mat().
 do_crop_image(_,_,_) ->
+    erlang:nif_error(nif_library_not_loaded).
+
+-spec do_get_dimensions(Mat :: image_mat()) ->
+    {non_neg_integer(), non_neg_integer()}.
+do_get_dimensions(_) ->
     erlang:nif_error(nif_library_not_loaded).
 
 %% -----------------------------------------------------------------------------

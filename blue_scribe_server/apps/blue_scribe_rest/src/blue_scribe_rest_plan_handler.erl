@@ -85,9 +85,12 @@ plan_json(Req0, State) ->
 do_json_ready_plan(PlanId) ->
     {ok, Name} = blue_scribe_plan_db:get_plan_name(PlanId),
     {ok, Desc} = blue_scribe_plan_db:get_plan_notes(PlanId),
+    {ok, {Width, Height}} = blue_scribe_plan_db:get_plan_dimensions(PlanId),
     {[{<<"id">>, PlanId},
       {<<"name">>, list_to_binary(Name)},
-      {<<"desc">>, list_to_binary(Desc)}]}.
+      {<<"desc">>, list_to_binary(Desc)},
+      {<<"width">>, integer_to_binary(Width)},
+      {<<"height">>, integer_to_binary(Height)}]}.
 
 plan_png(Req0, State) ->
     Res =

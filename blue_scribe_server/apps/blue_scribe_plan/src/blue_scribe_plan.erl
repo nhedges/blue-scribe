@@ -1,7 +1,7 @@
 -module(blue_scribe_plan).
 -behaviour(gen_server).
 
--export([load_plan/1, get_plan/1, start_link/1]).
+-export([load_plan/1, unload_plan/1, get_plan/1, get_dimensions/1, start_link/1]).
 
 -export([init/1, handle_call/3, handle_cast/2]).%, handle_info/2]).
 
@@ -11,7 +11,7 @@
 -define(CROP_Y, 380).
 
 -record(state,
-        {plan}).
+        {plan, image}).
 
 -spec load_plan(Id :: non_neg_integer()) -> {ok, non_neg_integer()} | {error,_}.
 load_plan(Id) ->
@@ -20,10 +20,19 @@ load_plan(Id) ->
         Other -> Other
     end.
 
+-spec unload_plan(Id :: non_neg_integer()) -> ok.
+unload_plan(Id) ->
+    gen_server:cast({global, {?MODULE, Id}}, unload).
+
 -spec get_plan(PlanId :: non_neg_integer()) ->
     {ok, _}|{error,_}.
 get_plan(Id) ->
     gen_server:call({global,{?MODULE, Id}}, get_plan).
+
+-spec get_dimensions(PlanId :: non_neg_integer()) ->
+    {ok, {non_neg_integer(), non_neg_integer()}}|{error,_}.
+get_dimensions(Id) ->
+    gen_server:call({global,{?MODULE, Id}}, get_dimensions).
 
 start_link(Id) ->
     gen_server:start_link({global, {?MODULE, Id}}, ?MODULE, [Id], []).
@@ -45,14 +54,21 @@ init([Id]) ->
             logger:error("~p: Error: plan ~p not found", [?MODULE, Id]),
             blue_scribe_plan_image:do_image_to_plan(ImgCropped)
     end,
-    {ok, #state{plan=Plan}}.
+    {ok, #state{plan=Plan, image=Img}}.
 
 handle_call(get_plan, _From, #state{plan=Plan}=State) ->
     {reply, {ok, Plan}, State};
 
+handle_call(get_dimensions, _From, #state{image=Img}=State) ->
+    {W,H} = blue_scribe_plan_image:do_get_dimensions(Img),
+    {reply, {ok, {W,H}}, State};
+
 handle_call(Call, _, State) ->
     logger:warning("~p: Unknown call ~p", [?MODULE, Call]),
     {reply, ok, State}.
+
+handle_cast(unload, State) ->
+    {stop, normal, State};
 
 handle_cast(Cast, State) ->
     logger:warning("~p: Unknown call ~p", [?MODULE, Cast]),

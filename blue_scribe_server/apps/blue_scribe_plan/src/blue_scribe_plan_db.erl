@@ -4,6 +4,7 @@
 
 -export([install/0, get_all_plan_ids/0, get_plan_name/1, get_plan_notes/1,
          get_plan_op_list/1, get_plan_preview_png/1,
+         get_plan_dimensions/1,
          create_plan/3, update_plan_name/2,
          update_plan_notes/2, update_plan_op_list/2,
          increment_plan_start_counter/1,
@@ -16,6 +17,8 @@
                            notes :: string(),
                            started_count = 0 :: non_neg_integer(),
                            completed_count = 0 :: non_neg_integer(),
+                           width :: non_neg_integer(),
+                           height :: non_neg_integer(),
                            op_list :: laser_plan() | undefined}).
 
 -spec get_all_plan_ids() -> [non_neg_integer()].
@@ -69,6 +72,19 @@ get_plan_preview_png(Id) ->
     Filename = do_get_png_filename(Id),
     file:read_file(Filename).
 
+-spec get_plan_dimensions(Id :: non_neg_integer()) ->
+    {ok, {Width :: non_neg_integer(), Height :: non_neg_integer()}}|{error,_}.
+get_plan_dimensions(Id) ->
+    F =
+    fun() ->
+            case mnesia:read({blue_scribe_plan, Id}) of
+                [] -> {error, not_found};
+                [#blue_scribe_plan{width=W, height=H}] ->
+                    {ok, {W, H}}
+            end
+    end,
+    mnesia:activity(transaction, F).
+
 -spec create_plan(File :: binary(),
                   Name :: string(),
                   Notes :: string()) ->
@@ -79,10 +95,19 @@ create_plan(File, Name, Notes) ->
                 Filename = do_get_png_filename(Id),
                 %TODO make sure these go somewhere appropriate (priv, etc)
                 ok = file:write_file(Filename, File),
+                % get the dimensions
+                % load the plan, it will auto-crop.
+                blue_scribe_plan:load_plan(Id),
+                {ok, {W,H}} = blue_scribe_plan:get_dimensions(Id),
+                {ok, Plan} = blue_scribe_plan:get_plan(Id),
+                blue_scribe_plan:unload_plan(Id),
                 ok = mnesia:write(#blue_scribe_plan{
                                      id=Id,
                                      name=Name,
-                                     notes=Notes}),
+                                     notes=Notes,
+                                     width=W,
+                                     height=H,
+                                     op_list=Plan}),
                 {ok, Id}
         end,
     mnesia:activity(transaction, F).

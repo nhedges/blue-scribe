@@ -103,6 +103,20 @@ static ERL_NIF_TERM do_crop_image(ErlNifEnv* env, int argc, const ERL_NIF_TERM a
     return ret;
 }
 
+static ERL_NIF_TERM do_get_dimensions(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
+{
+    CvImage* imageResource;
+    if(argc != 1) return enif_make_badarg(env);
+
+    if(!enif_get_resource(env, argv[0], matRt, (void**)&imageResource))
+        return enif_make_badarg(env);
+    auto foundElement = matMap.find(imageResource->id);
+    if (foundElement == matMap.end()) return enif_make_badarg(env);
+    cv::Mat image = matMap.at(imageResource->id);
+    cv::Size imageSize = image.size();
+    return enif_make_tuple2(env, enif_make_int(env, imageSize.width), enif_make_int(env, imageSize.height));
+}
+
 static ERL_NIF_TERM do_png_encode(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
 {
     CvImage* imageResource;
@@ -240,6 +254,7 @@ static ErlNifFunc nif_funcs[] = {
     {"do_load_png_file", 1, do_load_png_file},
     {"do_count_mats", 0, do_count_mats},
     {"do_crop_image", 3, do_crop_image},
+    {"do_get_dimensions", 1, do_get_dimensions},
     {"do_png_encode", 1, do_png_encode},
     {"do_image_to_plan", 1, do_image_to_plan}
 };
