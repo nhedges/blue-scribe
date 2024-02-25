@@ -48,6 +48,7 @@ static ERL_NIF_TERM do_load_png_file(ErlNifEnv* env, int argc, const ERL_NIF_TER
     CvImage* imageRes = (CvImage*)enif_alloc_resource(matRt, sizeof(CvImage));
     imageRes->id = id;
     ERL_NIF_TERM ret = enif_make_resource(env, imageRes);
+    enif_release_resource(imageRes);
     return ret;
 }
 
@@ -100,6 +101,7 @@ static ERL_NIF_TERM do_crop_image(ErlNifEnv* env, int argc, const ERL_NIF_TERM a
     CvImage* imageRes = (CvImage*)enif_alloc_resource(matRt, sizeof(CvImage));
     imageRes->id = id;
     ERL_NIF_TERM ret = enif_make_resource(env, imageRes);
+    enif_release_resource(imageRes);
     return ret;
 }
 
