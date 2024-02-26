@@ -11,6 +11,7 @@
                 html = html + "<p>" + plan.desc + "</p>";
                 html = html + "<p>(" + plan.width + " x " + plan.height + ")</p>";
                 html = html + gen_burn_button(plan);
+                html = html + gen_corner_align_button(plan.id);
                 html = html + gen_delete_button(plan.id);
                 html = html + "</td></tr>";
                 return html;
@@ -26,6 +27,14 @@
             function gen_delete_button(plan) {
                 var html =
                     "<form id=\"delete-" + plan + "\" method=\"post\" onsubmit=\"return delete_button_press(" + plan + ");\"><input type=\"submit\" value=\"Delete\"></form>";
+                return html;
+            }
+            function gen_corner_align_button(plan) {
+                var html = "<form action=\"/burner/start\" method=\"post\" enctype=\"multipart/form-data\">";
+                html = html + "<input type=\"hidden\" id=\"cornerPlanId\" name=\"planId\" value=\"" + plan + "\">";
+                html = html + "<input type=\"hidden\" id=\"cornerPowerScale\" name=\"powerScale\" value=\"corner-align\">";
+                html = html + "<input type=\"submit\" id=\"corner-align-button\" value=\"Corner Alignment\">";
+                html = html + "</form>";
                 return html;
             }
             function load_plans(path) {

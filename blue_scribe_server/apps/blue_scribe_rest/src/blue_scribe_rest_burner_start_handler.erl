@@ -30,7 +30,18 @@ resource_exists(Req0, State) ->
     PowerScaleBin = proplists:get_value({data, <<"powerScale">>}, ParsedForm),
     {Exists, Id, PowerScale} =
     case {PlanIdBin, PowerScaleBin} of
-        {undefined, _} -> 
+        {_, <<"corner-align">>} ->
+            try list_to_integer(binary_to_list(PlanIdBin)) of
+                IdConv ->
+                    {do_plan_exists(IdConv), IdConv, corner_alignment}
+            catch
+                _:badarg ->
+                    logger:warning("~p: Badarg parsing planId: "
+                                   "~p or powerScale: ~p",
+                                   [?MODULE, PlanIdBin, PowerScaleBin]),
+                    {false, undefined, undefined}
+            end;
+        {undefined, _} ->
             logger:warning("~p: No planId in request", [?MODULE]),
             {false, undefined, undefined};
         {_, undefined} ->
@@ -56,6 +67,15 @@ do_plan_exists(PlanId) ->
         {ok,_} -> true;
         _ -> false
     end.
+
+to_html(Req0, #state{planId=Id, powerScale=corner_alignment}=State) ->
+    Result =
+    case do_corner_align(Id) of
+        ok -> true;
+        {error, _} -> false
+    end,
+    {Result, Req0, State};
+
 
 to_html(Req0, #state{planId=Id, powerScale=PowerScale}=State) ->
     Result=
@@ -91,6 +111,21 @@ do_start_burn(Id, PowerScale) ->
         {error, Err} ->
             logger:error("~p: Start burn: ~p", [?MODULE, Err]),
             {error, Err}
+    end.
+
+do_corner_align(Id) ->
+    Loaded =
+    case blue_scribe_plan:load_plan(Id) of
+        {error, {already_started, _}} -> true;
+        {ok, _} -> true;
+        {error, Err} ->
+            logger:error("~p: ~p", [?MODULE, Err]),
+            false
+    end,
+    case Loaded of
+        false -> {error, no_plan};
+        true ->
+            blue_scribe_laser:corner_align_next(Id)
     end.
 
 acc_multipart(Req0, Acc) ->
