@@ -1,7 +1,7 @@
 -module(blue_scribe_laser).
 -behaviour(gen_server).
 
--export([start_link/0, start_burn/2, home/0, corner_align_next/0, pause_burn/0,
+-export([start_link/0, start_burn/2, home/0, corner_align_next/1, pause_burn/0,
          resume_burn/0, cancel_burn/0, stop/0, status/0]).
 
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2]).
@@ -9,17 +9,19 @@
 %TEMP
 -export([do_setup_serial/3]).
 
+-define(MOTOR_SCALE, 50).
+
 -include_lib("blue_scribe_burner/include/blue_scribe_burner.hrl").
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").
 -endif.%TEST
 
 -record(state,{serial_pid :: pid() | undefined,
-               planId :: non_neg_integer() | undefined,
-               plan :: laser_plan() | corner_alignment | undefined,
+               planId :: non_neg_integer() | {corner_alignment, non_neg_integer()} | undefined,
+               plan :: laser_plan() | undefined,
                active_op :: laser_cmdop() | undefined,
                opsCompleted = 0 :: non_neg_integer(),
-               corner_alignment :: 0..3 | undefined,
+               corner_alignment :: {0..3, non_neg_integer(), non_neg_integer()} | undefined,
                powerScale=1.0 :: float(),
                paused = false :: boolean()}).
 
@@ -31,9 +33,9 @@ start_burn(PlanId, PowerScale) ->
 home() ->
     gen_server:call(?MODULE, home).
 
--spec corner_align_next() -> ok | {error,_}.
-corner_align_next() ->
-    gen_server:call(?MODULE, corner).
+-spec corner_align_next(PlanId :: non_neg_integer()) -> ok | {error,_}.
+corner_align_next(PlanId) ->
+    gen_server:call(?MODULE, {corner, PlanId}).
 
 -spec pause_burn() -> ok | {error, _}.
 pause_burn() ->
@@ -102,12 +104,43 @@ handle_call(home, _From, #state{plan=Plan}=State) ->
     logger:info("~p: Inserting HOME into current plan", [?MODULE]),
     {reply, ok, State#state{plan=NewPlan}};
 
-handle_call(corner_alignment, _From, #state{plan=undefined,
-                                             active_op=undefined,
-                                             corner_alignment=CA}=State) ->
-    NewCA = do_corner_alignment(CA),
-    {reply, ok, State#state{plan = corner_alignment,
-                            corner_alignment=NewCA}};
+handle_call({corner, CornerPlanId}, _From, #state{plan=undefined,
+                                                  active_op=undefined,
+                                                  serial_pid=SerialPid,
+                                                  corner_alignment=undefined}=State) ->
+    case blue_scribe_plan:get_dimensions(CornerPlanId) of
+        {ok, {Width, Height}} ->
+            logger:info("~p: Starting corner alignment for plan ~p with dimensions ~p x ~p",
+                        [?MODULE, CornerPlanId, Width, Height]),
+            {RunOpRes, Op, NewCa} = do_corner_alignment(undefined, Width, Height, SerialPid),
+            NewPlan = [],
+            {reply, RunOpRes, State#state{planId={corner_alignment, CornerPlanId},
+                                    active_op=Op,
+                                    plan=NewPlan,
+                                    corner_alignment={NewCa, Width, Height}}};
+        {error, Err} ->
+            {reply, {error, Err}, State}
+    end;
+
+handle_call({corner, CornerPlanId}, _From, #state{planId={corner_alignment, CornerPlanId},
+                                                  serial_pid=SerialPid,
+                                                  active_op=undefined,
+                                                  corner_alignment={CA, W, H}}=State) ->
+    {RunOpRes, Op, NewCa} = do_corner_alignment(CA, W, H, SerialPid),
+    case NewCa of
+        undefined ->
+            {reply, RunOpRes, State#state{planId=undefined,
+                                          plan=[],
+                                          active_op=Op,
+                                          corner_alignment=undefined}};
+        Num when is_integer(Num) ->
+            {reply, RunOpRes, State#state{active_op=Op,
+                                          plan=[],
+                                          corner_alignment={NewCa, W, H}}}
+    end;
+
+handle_call({corner, _CornerPlanId}, _From, State) ->
+    {reply, {error, busy}, State};
 
 handle_call(pause_burn, _From, #state{plan=undefined}=State) ->
     {reply, {error, not_running}, State};
@@ -138,10 +171,15 @@ handle_call(cancel_burn, _From, #state{powerScale=PowerScale,
     logger:info("~p: Cancelling burn", [?MODULE]),
     Op = #laser_command{class='HM', arg1=0, arg2=0},
     Res = do_run_op(Op, PowerScale, SerialPid),
-    {reply, Res, State#state{paused=false, active_op=undefined, plan=undefined}};
+    {reply, Res, State#state{paused=false,
+                             planId=undefined,
+                             corner_alignment=undefined,
+                             active_op=undefined,
+                             plan=undefined}};
 
-handle_call(status, _From, #state{plan=corner_alignment,
-                                  corner_alignment=Corner}=State) ->
+handle_call(status, _From, #state{planId={corner_alignment, _PlanId},
+                                  corner_alignment={Corner,_,_}}=State) ->
+    %TODO maybe report the plan ID as well?
     Result = [{corner, Corner}],
     {reply, {ok, Result}, State};
 
@@ -227,7 +265,7 @@ do_handle_serial_message(<<"A\n\r">>, #state{plan=Plan,
                      active_op=NewActiveOp,
                      opsCompleted=CompletedOps+1}}.
 
--spec do_get_next_cmd(Op :: laser_cmdop()) -> #laser_command{} | undefined.
+-spec do_get_next_cmd(Op :: laser_cmdop()|undefined) -> #laser_command{} | undefined.
 do_get_next_cmd(#laser_command{}=Cmd) -> Cmd;
 do_get_next_cmd(#laser_operation{commands=[NextCmd | _Rest]}) ->
     NextCmd;
@@ -328,22 +366,49 @@ do_scale_power(#laser_command{arg2=Power}=Cmd, Scale) ->
 
 
 
--spec do_corner_alignment(CurrentCorner :: 0..3 | undefined) -> 0..3 | undefined.
-do_corner_alignment(undefined) ->
+-spec do_corner_alignment(CurrentCorner :: 0..3 | undefined,
+                          Width :: non_neg_integer(),
+                          Height :: non_neg_integer(),
+                          SerialPid :: pid()) ->
+    {ok|{error,_}, laser_cmdop(), 0..3 | undefined}.
+do_corner_alignment(undefined, _W, _H, SerialPid) ->
     %do_home
-    0;
-do_corner_alignment(0) ->
+    Op = #laser_command{class='HM', arg1=0, arg2=0},
+    RunOpRes = do_run_cmd(Op, 1.0, SerialPid),
+    {RunOpRes, Op, 0};
+
+do_corner_alignment(0, W, _H, SerialPid) ->
     % do move right
-    1;
-do_corner_alignment(1) ->
+    Op = #laser_command{class='GO',
+                        arg1=W*?MOTOR_SCALE,
+                        arg2=0},
+    RunOpRes = do_run_cmd(Op, 1.0, SerialPid),
+    {RunOpRes, Op, 1};
+
+do_corner_alignment(1, W, H, SerialPid) ->
     % do move down
-    2;
-do_corner_alignment(2) ->
+    Op = #laser_command{class='GO',
+                        arg1=W*?MOTOR_SCALE,
+                        arg2=H*?MOTOR_SCALE},
+
+    RunOpRes = do_run_cmd(Op, 1.0, SerialPid),
+    {RunOpRes, Op, 2};
+
+do_corner_alignment(2, _W, H, SerialPid) ->
     % do move left
-    3;
-do_corner_alignment(3) ->
+    Op = #laser_command{class='GO',
+                        arg1=0,
+                        arg2=H*?MOTOR_SCALE},
+    RunOpRes = do_run_cmd(Op, 1.0, SerialPid),
+    {RunOpRes, Op, 3};
+
+do_corner_alignment(3, _W, _H, SerialPid) ->
     % move up
-    undefined.
+    Op = #laser_command{class='GO',
+                        arg1=0,
+                        arg2=0},
+    RunOpRes = do_run_cmd(Op, 1.0, SerialPid),
+    {RunOpRes, Op, undefined}.
 
 
 -ifdef(TEST).
