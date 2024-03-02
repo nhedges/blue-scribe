@@ -18,7 +18,7 @@
                 return html;
             }
             function gen_burn_button(plan) {
-                var html = "<form action=\"/burner/start\" method=\"post\" enctype=\"multipart/form-data\">";
+                var html = "<form action=\"/burner/start\" method=\"post\" enctype=\"multipart/form-data\" onsubmit=\"setTimeout(function(){load_status();}, 200);\">";
                 html = html + "<input type=\"hidden\" id=\"planId\" name=\"planId\" value=\"" + plan.id + "\">";
                 html = html + "<input type=\"range\" id=\"powerScale\" name=\"powerScale\" step=\"0.01\" min=\"0.0\" max=\"2.0\">";
                 html = html + "<input type=\"submit\" id=\"burn-button\" value=\"Start Burn\">";
@@ -31,11 +31,35 @@
                 return html;
             }
             function gen_corner_align_button(plan) {
-                var html = "<form action=\"/burner/start\" method=\"post\" enctype=\"multipart/form-data\">";
+                var html = "<form action=\"/burner/start\" method=\"post\" enctype=\"multipart/form-data\" onsubmit=\"setTimeout(function(){load_status();}, 200);\">";
                 html = html + "<input type=\"hidden\" id=\"cornerPlanId\" name=\"planId\" value=\"" + plan + "\">";
                 html = html + "<input type=\"hidden\" id=\"cornerPowerScale\" name=\"powerScale\" value=\"corner-align\">";
                 html = html + "<input type=\"submit\" id=\"corner-align-button\" value=\"Corner Alignment\">";
                 html = html + "</form>";
+                return html;
+            }
+            function gen_next_corner_button(corner, plan) {
+                var cornerString;
+                switch(corner) {
+                    case 0:
+                        cornerString = '\u2197';
+                        break;
+                    case 1:
+                        cornerString = '\u2198';
+                        break;
+                    case 2:
+                        cornerString = '\u2199';
+                        break;
+                    case 3:
+                        cornerString = '\u2196';
+                        break;
+                    default:
+                        cornerString = "?";
+                }
+                var html = "<form action=\"/burner/start\" method=\"post\" enctype=\"multipart/form-data\" onsubmit=\"setTimeout(function(){load_status();}, 200);\">";
+                html = html + "<input type=\"hidden\" id=\"cornerPlanId\" name=\"planId\" value=\"" + plan + "\">";
+                html = html + "<input type=\"hidden\" id=\"cornerPowerScale\" name=\"powerScale\" value=\"corner-align\">";
+                html = html + "<input type=\"submit\" id=\"corner-align-button\" value=\"" + cornerString + "\">";
                 return html;
             }
             function load_plans(path) {
@@ -106,13 +130,24 @@
                 fetch(apiUrl, {headers: {'Accept': 'application/json'}, cache: "no-store"}).then(response => {
                 return response.json();
             }).then(data => {
-                var newContent = "<table>";
-                newContent = newContent + "<tr><td>Paused:</td><td>" + data.paused.toString() + "</td></tr>";
-                newContent = newContent + "</table>";
-                newContent = newContent + gen_pause_unpause_button(data.paused);
-                console.log(newContent);
-                document.getElementById("status-report").innerHTML
-                = newContent;
+                var previewImage;
+                if ("planId" in data && data.planId != "undefined")
+                {
+                    previewImage = "<img src=\"plan/" + data.planId + "/preview.png\" alt=\"Plan " + data.planId + "\" style=\"width:256px;\">";
+                }
+                else
+                {
+                    previewImage = "<h1 style=\"color:Green\">READY</h2>";
+                }
+                document.getElementById("status-preview").innerHTML = previewImage;
+                if ("corner" in data)
+                {
+                    document.getElementById("pause-unpause-button").innerHTML = gen_next_corner_button(data.corner, data.planId);
+                }
+                else
+                {
+                    document.getElementById("pause-unpause-button").innerHTML = gen_pause_unpause_button(data.paused);
+                }
             }).catch(err => {
                 console.log("error: " + err);
                 // Do something for an error here
@@ -142,17 +177,27 @@
     <body onload="on_load()">
         <h1>Laser Engraver Home</h1>
         <h2>Status</h2>
-        <p>
-            <div id="status-report"></div>
-            <form action="/burner/status" method="post" enctype="multipart/form-data">
-                <input type="hidden" name="home" value="true">
-                <input type="submit" id="home-button" value="Re-align">
-            </form>
-            <form action="/burner/status" method="post" enctype="multipart/form-data" onsubmit="return cancel_button_press();">
-                <input type="hidden" name="cancel" value="true">
-                <input type="submit" id="cancel-button" value="Cancel">
-            </form>
-        </p>
+        <table>
+            <tr>
+                <td colspan="3" id="status-preview" align="center" valign="middle"></td>
+            </tr>
+            <tr>
+                <td>
+                    <form action="/burner/status" method="post" enctype="multipart/form-data" onsubmit="return cancel_button_press();">
+                        <input type="hidden" name="cancel" value="true">
+                        <input type="submit" id="cancel-button" value="Cancel">
+                    </form>
+                </td>
+                <td id="pause-unpause-button">
+                </td>
+                <td>
+                    <form action="/burner/status" method="post" enctype="multipart/form-data">
+                        <input type="hidden" name="home" value="true">
+                        <input type="submit" id="home-button" value="Re-align">
+                    </form>
+                </td>
+            </tr>
+        </table>
         <h2>Plans</h2>
         <p id="plan-list">
             Loading plan list...

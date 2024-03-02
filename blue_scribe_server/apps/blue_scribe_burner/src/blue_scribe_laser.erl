@@ -177,25 +177,29 @@ handle_call(cancel_burn, _From, #state{powerScale=PowerScale,
                              active_op=undefined,
                              plan=undefined}};
 
-handle_call(status, _From, #state{planId={corner_alignment, _PlanId},
+handle_call(status, _From, #state{planId={corner_alignment, PlanId},
                                   corner_alignment={Corner,_,_}}=State) ->
-    %TODO maybe report the plan ID as well?
-    Result = [{corner, Corner}],
+    Result = [{planId, PlanId},
+              {corner, Corner}],
     {reply, {ok, Result}, State};
 
-handle_call(status, _From, #state{plan=Plan,
+handle_call(status, _From, #state{planId=PlanId,
+                                  plan=Plan,
                                   powerScale=PowerScale,
                                   opsCompleted=CompletedOps,
                                   paused=Paused}=State) ->
-    OpsRemaining =
-    if Plan == undefined -> 0;
-       true -> length(Plan)
+    {OpsRemaining, TimeRemaining} =
+    if Plan == undefined -> {0, 0};
+       true -> {length(Plan),
+                round(blue_scribe_plan:get_plan_time_estimate_seconds(Plan))}
     end,
     Result =
-    [{paused, Paused},
+    [{planId, PlanId},
+     {paused, Paused},
      {powerScale, PowerScale},
      {opsRemaining, OpsRemaining},
-     {opsCompleted, CompletedOps}],
+     {opsCompleted, CompletedOps},
+     {timeRemaining, tuple_to_list(calendar:seconds_to_time(TimeRemaining))}],
     {reply, {ok, Result}, State};
 
 handle_call(Call, _, State) ->

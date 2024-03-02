@@ -2,7 +2,8 @@
 -behaviour(gen_server).
 
 -export([load_plan/1, unload_plan/1, get_plan/1, get_dimensions/1,
-         get_plan_id_time_estimate/1, get_plan_time_estimate/1, start_link/1]).
+         get_plan_id_time_estimate/1, get_plan_time_estimate/1,
+         get_plan_time_estimate_seconds/1, start_link/1]).
 
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2]).
 
@@ -45,6 +46,10 @@ get_plan_id_time_estimate(Id) ->
         _ -> ok
     end,
     {ok, Plan} = get_plan(Id),
+    get_plan_time_estimate_seconds(Plan).
+
+-spec get_plan_time_estimate_seconds(Plan :: laser_plan()) -> float().
+get_plan_time_estimate_seconds(Plan) ->
     get_plan_time_estimate(Plan) * ?COEF_PIXELS_TO_SECONDS.
 
 -spec get_plan_time_estimate(Plan :: laser_plan()) -> non_neg_integer().
