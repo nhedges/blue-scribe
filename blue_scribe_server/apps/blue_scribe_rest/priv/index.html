@@ -10,6 +10,7 @@
                 html = html + "<p>" + plan.name + "</p>";
                 html = html + "<p>" + plan.desc + "</p>";
                 html = html + "<p>(" + plan.width + " x " + plan.height + ")</p>";
+                html = html + "<p>ETA: " + plan.time_hms[0] + ":" + plan.time_hms[1] + ":" + plan.time_hms[2] + "</p>";
                 html = html + gen_burn_button(plan);
                 html = html + gen_corner_align_button(plan.id);
                 html = html + gen_delete_button(plan.id);
