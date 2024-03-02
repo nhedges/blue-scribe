@@ -123,6 +123,12 @@
                 result = result + "</form>";
                 return result;
             }
+            function gen_progress(opsCompleted, opsRemaining, timeRemaining) {
+                var html = "";
+                html = html + "ETA: " + timeRemaining[0] + ":" + timeRemaining[1] + ":" + timeRemaining[2];
+                html = html + "<progress id=\"burn-progress\" max=\"" + (opsRemaining + opsCompleted) + "\" value=\"" + opsCompleted + "\"></progress>";
+                return html;
+            }
             function load_status() {
                 console.log("loading status...");
                 var statusReport = "";
@@ -147,6 +153,7 @@
                 else
                 {
                     document.getElementById("pause-unpause-button").innerHTML = gen_pause_unpause_button(data.paused);
+                    document.getElementById("status-progress").innerHTML = gen_progress(data.opsCompleted, data.opsRemaining, data.timeRemaining);
                 }
             }).catch(err => {
                 console.log("error: " + err);
@@ -196,6 +203,9 @@
                         <input type="submit" id="home-button" value="Re-align">
                     </form>
                 </td>
+            </tr>
+            <tr>
+                <td id="status-progress" colspan="3"></td>
             </tr>
         </table>
         <h2>Plans</h2>
