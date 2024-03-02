@@ -16,7 +16,7 @@ recv_loop(Pid) ->
   receive
     {'$gen_cast', {send, Message}} when is_list(Message) orelse is_binary(Message) ->
       io:format("UART SEND ~s~n", [Message]),
-      timer:sleep(rand:uniform(3000)),
+      timer:sleep(rand:uniform(100)),
       Pid ! {serial_rx_data, <<"A\n\r">>};
     Message ->
       io:format("~p: Unknown command:~p~n", [?MODULE, Message])
