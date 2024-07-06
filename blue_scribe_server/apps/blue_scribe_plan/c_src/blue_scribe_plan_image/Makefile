@@ -32,7 +32,7 @@ else ifeq ($(UNAME_SYS), Linux)
 endif
 
 CFLAGS += -fPIC -I $(ERTS_INCLUDE_DIR) -I $(ERL_INTERFACE_INCLUDE_DIR)
-CXXFLAGS += -fPIC -I $(ERTS_INCLUDE_DIR) -I $(ERL_INTERFACE_INCLUDE_DIR)
+CXXFLAGS += -fPIC -I $(ERTS_INCLUDE_DIR) -I $(ERL_INTERFACE_INCLUDE_DIR) `pkg-config --cflags-only-I opencv4`
 
 LDLIBS += -L $(ERL_INTERFACE_LIB_DIR) -lei `pkg-config --cflags --libs opencv4`
 LDFLAGS += -shared
