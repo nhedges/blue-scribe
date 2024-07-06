@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <link rel="stylesheet" href="default.css">
+        <script>
+            function gen_connect_form(ssid) {
+                var html = "<form action=\"/wifi/connect\" method=\"post\" enctype=\"multipart/form-data\" onsubmit=\"setTimeout(function(){load_network_list();}, 200);\">";
+                html = html + "<input type=\"hidden\" id=\"ssid\" name=\"ssid\" value=\"" + ssid + "\">";
+                html = html + "<input type=\"password\" id=\"psk\" name=\"psk\" value=\"\">";
+                html = html + "<input type=\"submit\" id=\"connect-button\" value=\"Connect\">";
+                html = html + "</form>";
+                return html;
+            }
+            function gen_net_entry(ssid, connected, remembered, security) {
+                var html = "<tr><td>" + ssid + "</td>";
+                if (connected) {
+                    html = html + "<td style=\"color:Green\">Connected</td>"
+                }
+                else {
+                    html = html + "<td>" + gen_connect_form(ssid) + "</td>";
+                }
+                if (remembered) {
+                    html = html + "<td style=\"color:Green\">Known</td>"
+                }
+                else {
+                    html = html + "<td></td>";
+                }
+                html = html + "<td>" + security + "</td><tr>";
+                return html;
+            }
+            function load_network_list() {
+                var apiUrl = 'wifi/networks';
+                fetch(apiUrl, {headers: {'Accept': 'application/json'}, cache: "no-store"}).then(response => {
+                    return response.json();
+                }).then(data => {
+                    var newContent = "<tr><th>SSID</th><th>Connected</th><th>Known</th><th>Security</th></tr>";
+                    for (var i = 0; i < data.length; i++) {
+                        var a = data[i];
+                        newContent = newContent + gen_net_entry(a.ssid, a.connected, a.remembered, a.security);
+                    }
+                    document.getElementById("networks").innerHTML = newContent;
+                });
+            }
+            function on_load() {
+                load_network_list();
+            }
+        </script>
+    </head>
+    <body onload="on_load()">
+        <h1>WIFI Configuration</h1>
+        <h2>Networks</h2>
+        <table id="networks"></table>
+    </body>
+</html>
