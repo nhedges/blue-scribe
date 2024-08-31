@@ -37,9 +37,14 @@ get_networks_summary() ->
     Summary = lists:map(fun(Info) -> do_compose_network_summary(Info, AllSsids2) end, VisibleNetworkInfo),
     Summary.
 
-delete_network(_) ->
-    %TODO
-    not_implemented.
+-spec delete_network(Ssid::binary()) -> boolean().
+delete_network(Ssid) ->
+    case Ssid of
+        <<"Hello">> ->
+            true;
+        _ ->
+            false
+    end.
 
 init([]) ->
     case nmcli_helper:nmcli_running() of

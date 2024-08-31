@@ -1,7 +1,7 @@
 -module(blue_scribe_rest_wifi_handler).
 
 -export([init/2, allowed_methods/2, resource_exists/2, content_types_provided/2,
-         content_types_accepted/2, delete_resource/2, edit_config/2]).
+         content_types_accepted/2, delete_resource/2, to_html/2, edit_config/2]).
 
 -export([to_json/2]).
 
@@ -19,7 +19,10 @@ content_types_accepted(Req0, State) ->
 
 content_types_provided(Req0, State) ->
     Types =
-    [{{<<"application">>, <<"json">>, []}, to_json}],
+    [
+     {{<<"text">>, <<"html">>, []}, to_html},
+     {{<<"application">>, <<"json">>, []}, to_json}
+    ],
     {Types, Req0, State}.
 
 
@@ -49,7 +52,11 @@ resource_exists(Req0, State) ->
     %{SsidInConfig, Req0, State}.
 
 delete_resource(Req0, State) ->
-    {true, Req0, State}.%TODO
+    case cowboy_req:qs(Req0) of
+        <<"ssid=",IdStr/binary>> ->
+            Result = blue_scribe_wifi_manager:delete_network(IdStr),
+            {Result, Req0, State}
+    end.
 
 edit_config(Req0, State) ->
     {HeadersAndBody, Req1} = acc_multipart(Req0, []),
@@ -61,6 +68,9 @@ edit_config(Req0, State) ->
     PskBin = proplists:get_value({data, <<"psk">>}, ParsedForm),
     blue_scribe_wifi_manager:create_new_network(binary_to_list(SsidBin), binary_to_list(PskBin)),
     {true, Req0, State}.
+
+to_html(Req0, State) ->
+    {<<>>, Req0, State}.
 
 to_json(Req0, State) ->
     case cowboy_req:path_info(Req0) of

@@ -11,6 +11,20 @@
                 html = html + "</form>";
                 return html;
             }
+            function forget_button_press(ssid) {
+                var submit = confirm('Forget Network?');
+                if (submit)
+                {
+                    var apiUrl = 'wifi/networks?ssid=' + ssid;
+                    setTimeout(function() {fetch(apiUrl, {method: 'DELETE'});}, 10);
+                    setTimeout(function() {load_network_list();}, 20);
+                }
+                return false;
+            }
+            function gen_forget_form(ssid) {
+                var html = "<form id=\"delete-" + ssid + "\" method=\"post\" onsubmit=\"return forget_button_press('" + ssid + "');\"><input type=\"submit\" value=\"Forget\"></form>";
+                return html;
+            }
             function gen_net_entry(ssid, connected, remembered, security) {
                 var html = "<tr><td>" + ssid + "</td>";
                 if (connected) {
@@ -20,7 +34,7 @@
                     html = html + "<td>" + gen_connect_form(ssid) + "</td>";
                 }
                 if (remembered) {
-                    html = html + "<td style=\"color:Green\">Known</td>"
+                    html = html + "<td>" + gen_forget_form(ssid) + "</td>";
                 }
                 else {
                     html = html + "<td></td>";
