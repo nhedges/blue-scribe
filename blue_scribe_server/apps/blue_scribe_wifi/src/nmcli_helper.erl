@@ -4,7 +4,8 @@
          get_connection_ssid/1, connection_autoconnects/1,
          add_wifi_network/2, get_available_wifi_network_ssids/0,
          get_available_wifi_networks/0,
-         make_ad_hoc_network/2, disable_ad_hoc_network/0]).
+         make_ad_hoc_network/2, disable_ad_hoc_network/0,
+         forget_network/1]).
 
 -spec nmcli_running() -> boolean().
 nmcli_running() ->
@@ -113,4 +114,14 @@ do_get_field(FieldName, OutputStr) ->
             {ok, Result};
         _ ->
             {error, not_found}
+    end.
+
+forget_network(Ssid) when is_binary(Ssid) ->
+    forget_network(binary_to_list(Ssid));
+
+forget_network(Ssid) ->
+    Output = os:cmd("nmcli connection delete " ++ Ssid),
+    case re:run(Output, "[Ee][Rr][Rr][Oo][Rr]") of
+        nomatch -> ok;
+        _ -> {error, Output}
     end.

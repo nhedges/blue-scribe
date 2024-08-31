@@ -39,10 +39,10 @@ get_networks_summary() ->
 
 -spec delete_network(Ssid::binary()) -> boolean().
 delete_network(Ssid) ->
-    case Ssid of
-        <<"Hello">> ->
-            true;
-        _ ->
+    case nmcli_helper:forget_network(Ssid) of
+        ok -> true;
+        {error, Err} ->
+            logger:log(warning, Err),
             false
     end.
 
