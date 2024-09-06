@@ -222,12 +222,14 @@ get_png_filename(Id) ->
     do_get_png_filename(Id).
 
 install() ->
+    mnesia:stop(),
     mnesia:create_schema([node()]),
     application:start(mnesia),
     mnesia:create_table(blue_scribe_plan,
                         [{attributes, record_info(fields, blue_scribe_plan)},
                          %{index, [#blue_scribe_plan.id]},
-                         {disc_copies, [node()]}]).
+                         {disc_copies, [node()]}]),
+    mnesia:start().
 
 
 do_make_id() ->

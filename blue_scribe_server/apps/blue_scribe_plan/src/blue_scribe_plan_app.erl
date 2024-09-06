@@ -10,6 +10,7 @@
 -export([start/2, stop/1]).
 
 start(_StartType, _StartArgs) ->
+    blue_scribe_plan_db:install(),
     mnesia:wait_for_tables([blue_scribe_plan], 5000),
     blue_scribe_plan_sup:start_link().
 
