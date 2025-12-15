@@ -1,3 +1,5 @@
+#include <stdio.h>
+#include <string.h>
 #include "pico/stdlib.h"
 #include "hardware/gpio.h"
 #include "hardware/pwm.h"
@@ -6,6 +8,8 @@
 // Hardware limits of the ball screw motors
 #define XLIMIT 19000
 #define YLIMIT 19000
+
+#define RX_BUF_SIZE 128
 
 #define X_MOTOR_STEP 0
 #define X_MOTOR_DIR 1
@@ -48,55 +52,8 @@ const char doneFlag[5] = "A\n\r"; // what to print on successful op
 const char errorFlag[9] = "Error\n\r"; // error message
 
 static int chars_rxed = 0;
-// RX interrupt handler
-void on_uart_rx() {
-    while (uart_is_readable(UART_ID)) {
-        uint8_t ch = uart_getc(UART_ID);
-        // store into the buffer if there is room
-        if (uartBufIdx < UART_BUFFER_LEN)
-        {
-            uartBuf[uartBufIdx] = ch;
-            uartBufIdx++;
-        }
-        else
-        {
-            uart_puts(UART_ID, "Error: Command too long\n");
-            uartBufIdx = 0;
-        }
-        // Can we send it back?
-        /*
-        if (uart_is_writable(UART_ID)) {
-            // Change it slightly first!
-            ch++;
-            uart_putc(UART_ID, ch);
-        }
-        */
-        chars_rxed++;
-    }
-}
 
-// initialize the UART
-void UartInit()
-{
-    uart_init(UART_ID, BAUD_RATE);
-
-    // Set up a RX interrupt
-    // We need to set up the handler first
-    // Select correct interrupt for the UART we are using
-    int UART_IRQ = UART_ID == uart0 ? UART0_IRQ : UART1_IRQ;
-
-    // And set up and enable the interrupt handlers
-    irq_set_exclusive_handler(UART_IRQ, on_uart_rx);
-    irq_set_enabled(UART_IRQ, true);
-
-    // Now enable the UART to send interrupts - RX only
-    uart_set_irq_enables(UART_ID, true, false);
-
-    // OK, all set up.
-    // Lets send a basic string out, and then run a loop and wait for RX interrupts
-    // The handler will count them, but also reflect the incoming data back with a slight change!
-    uart_puts(UART_ID, "\nHello, uart interrupts\n");
-}
+static char serialTxBuf[RX_BUF_SIZE];
 
 // initialize motor pins
 void initMotorPins()
@@ -158,12 +115,72 @@ void initLaserAdc()
 }
 
 
+void chars_available_callback(void* ptr)
+{
+    (void)ptr;
+    static char serialRxBuf[RX_BUF_SIZE];
+    static unsigned int offset = 0;
+    if (state != recving)
+    {
+        return;
+    }
+    int cRxedChar = getchar_timeout_us(0);
+    if (cRxedChar == '\r')
+    {
+        memcpy(serialTxBuf, serialRxBuf, offset);
+        serialTxBuf[offset] = 0;
+        offset = 0;
+        state = sending;
+    }
+    else if (offset >= RX_BUF_SIZE-1)
+    {
+        memcpy(serialTxBuf, "ERROR: Command too long", 24);
+        serialTxBuf[offset] = 0;
+        offset = 0;
+        state = sending;
+    }
+    else
+    {
+        serialRxBuf[offset] = cRxedChar;
+        offset++;
+    }
+}
+
+void coreLoop()
+{
+    switch(state)
+    {
+        case sending:
+            printf("%s\n", serialTxBuf);
+            state = recving;
+            break;
+        case recving:
+        break;
+        default:
+    }
+
+
+}
+
 
 int main()
 {
+    stdio_init_all();
+    stdio_set_chars_available_callback(chars_available_callback, NULL);
+    // initMotorPins();
+    // initHomeSwitchPins();
+    // initLaserPwm();
+    char buf[128];
+    state = recving;
+    printf("Ready\n");
     while (1)
     {
-        tight_loop_contents();
+        coreLoop();
+        // sleep_ms(10000);
+        // scanf("%s\n", buf, 128);
+        //fgets(buf, 128, stdin);
+        //sleep_ms(1000);
+        //printf("%s\n", buf, 128);
     }
 }
 
