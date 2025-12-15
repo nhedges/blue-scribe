@@ -11,29 +11,32 @@
 
 #define RX_BUF_SIZE 128
 
-#define X_MOTOR_STEP 0
-#define X_MOTOR_DIR 1
-#define Y_MOTOR_STEP 2
-#define Y_MOTOR_DIR 3
+#define X_MOTOR_STEP 18
+#define X_MOTOR_DIR 19
+#define Y_MOTOR_STEP 20
+#define Y_MOTOR_DIR 21
 
-#define X_HOME_SWITCH 4
-#define Y_HOME_SWITCH 5
+#define X_HOME_SWITCH 16
+#define Y_HOME_SWITCH 17
 #define LASER_POWER_CONTROL PICO_DEFAULT_LED_PIN
 
 // UART hardware info
 #define UART_ID uart0
 #define BAUD_RATE 115200
 
-enum State {idling, moving, homing, recving, sending};
+enum LaserState {idling, moving, homing};
+enum IoState {recving, parsing, sending};
 enum Function {GO, HM, SQ, NONE};
 enum MotorStages {rising = 1, falling = 0};
 static enum MotorStages xMotorStage = rising;
 static enum MotorStages yMotorStage = rising;
-volatile enum State state = 0; //variable to keep track of the state we are in
+volatile enum LaserState laserState = idling; //variable to keep track of the state we are in
+volatile enum IoState ioState = recving; //variable to keep track of the state we are in
 volatile enum Function function = NONE; //variable to keep track of the function that was originally called
 static int motorTargetX = 0; //variable to keep track of our motor target
 static int motorTargetY = 0; //variable to keep track of our motor target
 static const uint32_t motorSpeed = 62353; //Predefined value to feed into our systick reload register to get our motor to move slow TODO adjust for new HW
+static repeating_timer_t motor_tick_timer; // Timer for motors updating
 
 
 static uint8_t directionX = 0; //0 = CW, 1 = CCW
@@ -45,15 +48,13 @@ static int motorLocationY = 0; //temp variable for current motor y position
 static int homeX = 0; //variable for the home location
 static int homeY = 0; //variable for the home location
 
-#define UART_BUFFER_LEN 128 // input buffer size
-static uint32_t uartBufIdx = 0; // tracks the buffer location
-static char uartBuf[UART_BUFFER_LEN];
 const char doneFlag[5] = "A\n\r"; // what to print on successful op
 const char errorFlag[9] = "Error\n\r"; // error message
 
-static int chars_rxed = 0;
-
+static char serialRxBuf[RX_BUF_SIZE];
+static unsigned int serialRxoffset = 0;
 static char serialTxBuf[RX_BUF_SIZE];
+static unsigned int txBufOffset = 0;
 
 // initialize motor pins
 void initMotorPins()
@@ -84,10 +85,10 @@ void initHomeSwitchPins()
     // We are using the button to pull down to 0v when pressed, so ensure that when
     // unpressed, it uses internal pull ups. Otherwise when unpressed, the input will
     // be floating.
-    gpio_pull_up(X_HOME_SWITCH);
+    gpio_pull_down(X_HOME_SWITCH);
     gpio_init(Y_HOME_SWITCH);
     gpio_set_dir(Y_HOME_SWITCH, GPIO_IN);
-    gpio_pull_up(Y_HOME_SWITCH);
+    gpio_pull_down(Y_HOME_SWITCH);
 }
 
 // initialize PWM for laser
@@ -114,47 +115,228 @@ void initLaserAdc()
     //TODO
 }
 
+void setXdir(uint8_t direction)
+{
+    gpio_put(X_MOTOR_DIR, direction);
+    directionX = direction;
+}
+
+void setYdir(uint8_t direction)
+{
+    gpio_put(Y_MOTOR_DIR, direction);
+    directionY = direction;
+}
+
+void step_x()
+{
+    if (xMotorStage == rising)
+    {
+        gpio_put(X_MOTOR_STEP, 1);
+        xMotorStage = falling;
+    }
+    else
+    {
+        gpio_put(X_MOTOR_STEP, 0);
+        xMotorStage = rising;
+    }
+}
+
+void step_y()
+{
+    if (yMotorStage == rising)
+    {
+        gpio_put(Y_MOTOR_STEP, 1);
+        yMotorStage = falling;
+    }
+    else
+    {
+        gpio_put(Y_MOTOR_STEP, 0);
+        yMotorStage = rising;
+    }
+}
+
+void sendUartAck()
+{
+    memcpy(serialTxBuf, "A", 2);
+    ioState = sending;
+}
+
+bool motor_tick_timer_callback(__unused repeating_timer_t *rt)
+{
+    switch(laserState)
+    {
+        case homing:
+            setXdir(0);
+            setYdir(0);
+            bool xhome = gpio_get(X_HOME_SWITCH);
+            bool yhome = gpio_get(Y_HOME_SWITCH);
+            if ((xhome && yhome) ||
+            (motorLocationX <= -10 && motorLocationY <= -10)) // TODO for mockup only
+            {
+                laserState = idling;
+                motorLocationX = 0;
+                motorLocationY = 0;
+                sendUartAck();
+                return false;
+            }
+            if (!xhome)
+            {
+                step_x();
+                motorLocationX--; // TODO mockup only
+            }
+            if (!yhome)
+            {
+                step_y();
+                motorLocationY--; // TODO mockup only
+            }
+            break;
+        case moving:
+            // TODO add checks to homing switches for procection 
+            if (motorTargetX == motorLocationX && motorTargetY == motorLocationY)
+            {
+                // destination point reached
+                laserState = idling;
+                sendUartAck();
+                return false;
+            }
+            if (motorTargetX > motorLocationX)
+            {
+                setXdir(1);
+                step_x();
+                motorLocationX++;
+            }
+            else if (motorTargetX < motorLocationX)
+            {
+                setXdir(0);
+                step_x();
+                motorLocationX--;
+            }
+            if (motorTargetY > motorLocationY)
+            {
+                setYdir(1);
+                step_y();
+                motorLocationY++;
+            }
+            else if (motorTargetY > motorLocationY)
+            {
+                setYdir(0);
+                step_y();
+                motorLocationY--;
+            }
+            break;
+        default:
+    }
+    return true; // continue repeating
+}
+
+void setLaser(uint8_t duty)
+{
+    // shift 8-bit duty to 16-bit
+    pwm_set_gpio_level(PICO_DEFAULT_LED_PIN, (duty << 8));
+}
+
+bool startHoming()
+{
+    // Don't care about current motor state
+    // set power level PWM to zero
+    setLaser(0);
+    // move into homing mode
+    laserState = homing;
+
+    // negative timeout means exact delay (rather than delay between callbacks)
+    int hz = 1; // TODO adjust
+    if (!add_repeating_timer_us(-1000000 / hz, motor_tick_timer_callback, NULL, &motor_tick_timer))
+    {
+        printf("ERROR: Failed to add timer\n");
+        return false;
+    }
+}
+
+bool startGo(int xDest, int yDest)
+{
+    if (laserState == idling)
+    {
+        setLaser(0);
+        motorTargetX = xDest;
+        motorTargetY = yDest;
+        laserState = moving;
+        // start timer
+        int hz = 1; // TODO adjust
+        if (!add_repeating_timer_us(-1000000 / hz, motor_tick_timer_callback, NULL, &motor_tick_timer))
+        {
+            printf("ERROR: Failed to add timer\n");
+            return false;
+        }
+        return true;
+    }
+    else
+    {
+        return false;
+    }
+}
+
 
 void chars_available_callback(void* ptr)
 {
     (void)ptr;
-    static char serialRxBuf[RX_BUF_SIZE];
-    static unsigned int offset = 0;
-    if (state != recving)
+    if (ioState != recving)
     {
+        // protect the buffer from interrupt modification
         return;
     }
     int cRxedChar = getchar_timeout_us(0);
     if (cRxedChar == '\r')
     {
-        memcpy(serialTxBuf, serialRxBuf, offset);
-        serialTxBuf[offset] = 0;
-        offset = 0;
-        state = sending;
+        serialRxBuf[serialRxoffset] = 0;
+        memcpy(serialTxBuf, serialRxBuf, serialRxoffset);
+        serialRxoffset = 0;
+        ioState = parsing;
     }
-    else if (offset >= RX_BUF_SIZE-1)
+    else if (serialRxoffset >= RX_BUF_SIZE-1)
     {
         memcpy(serialTxBuf, "ERROR: Command too long", 24);
-        serialTxBuf[offset] = 0;
-        offset = 0;
-        state = sending;
+        serialTxBuf[serialRxoffset] = 0;
+        serialRxoffset = 0;
+        ioState = sending;
     }
     else
     {
-        serialRxBuf[offset] = cRxedChar;
-        offset++;
+        serialRxBuf[serialRxoffset] = cRxedChar;
+        serialRxoffset++;
     }
 }
 
 void coreLoop()
 {
-    switch(state)
+    switch(ioState)
     {
         case sending:
-            printf("%s\n", serialTxBuf);
-            state = recving;
+            printf("%s (%d, %d)\n", serialTxBuf, motorLocationX, motorLocationY);
+            ioState = recving;
             break;
         case recving:
+        break;
+        case parsing:
+            int param1, param2;
+            if (2 == sscanf(serialRxBuf, "HM %d %d", &param1, &param2))
+            {
+                // HOME command matched
+                startHoming();
+            }
+            else if (2 == sscanf(serialRxBuf, "GO %d %d", &param1, &param2))
+            {
+                // GO command matched
+                printf("GO (%d, %d)\n", param1, param2);
+                if(!startGo(param1, param2))
+                {
+                    printf("ERROR: Not ready\n");
+                }
+            }
+            else
+            {
+                printf("ERROR: Unknown command\n");
+            }
+            ioState = recving;
         break;
         default:
     }
@@ -167,11 +349,12 @@ int main()
 {
     stdio_init_all();
     stdio_set_chars_available_callback(chars_available_callback, NULL);
-    // initMotorPins();
-    // initHomeSwitchPins();
-    // initLaserPwm();
+    initMotorPins();
+    initHomeSwitchPins();
+    initLaserPwm();
     char buf[128];
-    state = recving;
+    laserState = idling;
+    ioState = recving;
     printf("Ready\n");
     while (1)
     {
