@@ -127,31 +127,35 @@ void setYdir(uint8_t direction)
     directionY = direction;
 }
 
-void step_x()
+bool step_x()
 {
     if (xMotorStage == rising)
     {
         gpio_put(X_MOTOR_STEP, 1);
         xMotorStage = falling;
+        return true;
     }
     else
     {
         gpio_put(X_MOTOR_STEP, 0);
         xMotorStage = rising;
+        return false;
     }
 }
 
-void step_y()
+bool step_y()
 {
     if (yMotorStage == rising)
     {
         gpio_put(Y_MOTOR_STEP, 1);
         yMotorStage = falling;
+        return true;
     }
     else
     {
         gpio_put(Y_MOTOR_STEP, 0);
         yMotorStage = rising;
+        return false;
     }
 }
 
@@ -181,13 +185,17 @@ bool motor_tick_timer_callback(__unused repeating_timer_t *rt)
             }
             if (!xhome)
             {
-                step_x();
-                motorLocationX--; // TODO mockup only
+                if (step_x())
+                {
+                    motorLocationX--; // TODO mockup only
+                }
             }
             if (!yhome)
             {
-                step_y();
-                motorLocationY--; // TODO mockup only
+                if(step_y())
+                {
+                    motorLocationY--; // TODO mockup only
+                }
             }
             break;
         case moving:
@@ -202,26 +210,34 @@ bool motor_tick_timer_callback(__unused repeating_timer_t *rt)
             if (motorTargetX > motorLocationX)
             {
                 setXdir(1);
-                step_x();
-                motorLocationX++;
+                if (step_x())
+                {
+                    motorLocationX++;
+                }
             }
             else if (motorTargetX < motorLocationX)
             {
                 setXdir(0);
-                step_x();
-                motorLocationX--;
+                if(step_x())
+                {
+                    motorLocationX--;
+                }
             }
             if (motorTargetY > motorLocationY)
             {
                 setYdir(1);
-                step_y();
-                motorLocationY++;
+                if(step_y())
+                {
+                    motorLocationY++;
+                }
             }
-            else if (motorTargetY > motorLocationY)
+            else if (motorTargetY < motorLocationY)
             {
                 setYdir(0);
-                step_y();
-                motorLocationY--;
+                if(step_y())
+                {
+                    motorLocationY--;
+                }
             }
             break;
         default:
@@ -244,7 +260,7 @@ bool startHoming()
     laserState = homing;
 
     // negative timeout means exact delay (rather than delay between callbacks)
-    int hz = 1; // TODO adjust
+    int hz = 100; // TODO adjust
     if (!add_repeating_timer_us(-1000000 / hz, motor_tick_timer_callback, NULL, &motor_tick_timer))
     {
         printf("ERROR: Failed to add timer\n");
@@ -261,7 +277,7 @@ bool startGo(int xDest, int yDest)
         motorTargetY = yDest;
         laserState = moving;
         // start timer
-        int hz = 1; // TODO adjust
+        int hz = 100; // TODO adjust
         if (!add_repeating_timer_us(-1000000 / hz, motor_tick_timer_callback, NULL, &motor_tick_timer))
         {
             printf("ERROR: Failed to add timer\n");
