@@ -165,6 +165,12 @@ void sendUartAck()
     ioState = sending;
 }
 
+void setLaser(uint8_t duty)
+{
+    // shift 8-bit duty to 16-bit
+    pwm_set_gpio_level(PICO_DEFAULT_LED_PIN, (duty << 8));
+}
+
 bool motor_tick_timer_callback(__unused repeating_timer_t *rt)
 {
     switch(laserState)
@@ -204,6 +210,7 @@ bool motor_tick_timer_callback(__unused repeating_timer_t *rt)
             {
                 // destination point reached
                 laserState = idling;
+                setLaser(0);
                 sendUartAck();
                 return false;
             }
@@ -243,12 +250,6 @@ bool motor_tick_timer_callback(__unused repeating_timer_t *rt)
         default:
     }
     return true; // continue repeating
-}
-
-void setLaser(uint8_t duty)
-{
-    // shift 8-bit duty to 16-bit
-    pwm_set_gpio_level(PICO_DEFAULT_LED_PIN, (duty << 8));
 }
 
 bool startHoming()
@@ -291,6 +292,48 @@ bool startGo(int xDest, int yDest)
     }
 }
 
+bool startBurnHorizontal(int distance, int laserPower)
+{
+    if (laserState == idling)
+    {
+        motorTargetX = motorLocationX + distance; // TODO bounds check
+        motorTargetY = motorLocationY;
+        int hz = 100; // TODO adjust
+        bool timerResult = add_repeating_timer_us(-1000000 / hz, motor_tick_timer_callback, NULL, &motor_tick_timer);
+        if (timerResult)
+        {
+            laserState = moving;
+            setLaser(laserPower);
+            return true;
+        }
+        return false;
+    }
+    return false;
+}
+
+bool startBurnVertical(int distance, int laserPower)
+{
+    if (laserState == idling)
+    {
+        motorTargetX = motorLocationX;
+        motorTargetY = motorLocationY + distance; // TODO bounds check
+        int hz = 100; // TODO adjust
+        bool timerResult = add_repeating_timer_us(-1000000 / hz, motor_tick_timer_callback, NULL, &motor_tick_timer);
+        if (timerResult)
+        {
+            laserState = moving;
+            setLaser(laserPower);
+            return true;
+        }
+        return false;
+    }
+    return false;
+}
+
+bool startBurnSquare(int size, int power)
+{
+    return false;
+}
 
 void chars_available_callback(void* ptr)
 {
@@ -344,6 +387,30 @@ void coreLoop()
                 // GO command matched
                 printf("GO (%d, %d)\n", param1, param2);
                 if(!startGo(param1, param2))
+                {
+                    printf("ERROR: Not ready\n");
+                }
+            }
+            else if (2 == sscanf(serialRxBuf, "BH %d %d", &param1, &param2))
+            {
+                printf("BH(%d, %d)\n", param1, param2);
+                if (!startBurnHorizontal(param1,  param2))
+                {
+                    printf("ERROR: Not ready\n");
+                }
+            }
+            else if (2 == sscanf(serialRxBuf, "BV %d %d", &param1, &param2))
+            {
+                printf("BV(%d, %d)\n", param1, param2);
+                if (!startBurnVertical(param1,  param2))
+                {
+                    printf("ERROR: Not ready\n");
+                }
+            }
+            else if (2 == sscanf(serialRxBuf, "SQ %d %d", &param1, &param2))
+            {
+                printf("SQ(%d, %d)\n", param1, param2);
+                if (!startBurnSquare(param1,  param2))
                 {
                     printf("ERROR: Not ready\n");
                 }
