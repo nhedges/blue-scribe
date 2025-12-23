@@ -385,7 +385,7 @@ void coreLoop()
             else if (2 == sscanf(serialRxBuf, "GO %d %d", &param1, &param2))
             {
                 // GO command matched
-                printf("GO (%d, %d)\n", param1, param2);
+                // printf("GO (%d, %d)\n", param1, param2);
                 if(!startGo(param1, param2))
                 {
                     printf("ERROR: Not ready\n");
@@ -393,7 +393,7 @@ void coreLoop()
             }
             else if (2 == sscanf(serialRxBuf, "BH %d %d", &param1, &param2))
             {
-                printf("BH(%d, %d)\n", param1, param2);
+                // printf("BH(%d, %d)\n", param1, param2);
                 if (!startBurnHorizontal(param1,  param2))
                 {
                     printf("ERROR: Not ready\n");
@@ -401,7 +401,7 @@ void coreLoop()
             }
             else if (2 == sscanf(serialRxBuf, "BV %d %d", &param1, &param2))
             {
-                printf("BV(%d, %d)\n", param1, param2);
+                // printf("BV(%d, %d)\n", param1, param2);
                 if (!startBurnVertical(param1,  param2))
                 {
                     printf("ERROR: Not ready\n");
@@ -409,7 +409,7 @@ void coreLoop()
             }
             else if (2 == sscanf(serialRxBuf, "SQ %d %d", &param1, &param2))
             {
-                printf("SQ(%d, %d)\n", param1, param2);
+                // printf("SQ(%d, %d)\n", param1, param2);
                 if (!startBurnSquare(param1,  param2))
                 {
                     printf("ERROR: Not ready\n");

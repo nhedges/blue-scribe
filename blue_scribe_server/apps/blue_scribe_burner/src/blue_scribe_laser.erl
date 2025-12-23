@@ -61,7 +61,8 @@ start_link() ->
     gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
 
 init([]) ->
-    {ok, SerialPid} = laser_serial_mockup:start(self()),
+    %{ok, SerialPid} = laser_serial_mockup:start(self()),
+    {ok, SerialPid} = do_setup_serial("/dev/ttyS0", 115200, self()),
     {ok, #state{serial_pid=SerialPid}}.
 
 handle_call(_, _From, #state{serial_pid=undefined}=State) ->
@@ -221,7 +222,7 @@ handle_info({serial_rx_data, BinaryMessage},
 do_setup_serial(Path, Baud, _ListenerPid) ->
   logger:info("~p: Setting up serial for ~s, @ ~p baud~n",[?MODULE, Path, Baud]),
   {ok, SerialPid} =
-  serial:start_link([{open, Path},{speed, Baud},{message_delimiter, "\r\n"}]),
+  serial:start_link([{open, Path},{speed, Baud},{message_delimiter, "\n"}]),
   %serial:send(SerialPid, "AT\r\n"),
   {ok, SerialPid}.
 
@@ -231,7 +232,7 @@ do_handle_serial_message(<<"Error\n\r">>, #state{active_op=Op}=State) ->
     logger:error("~p: Microcontroller responded with error. "
                  "Active op: ~p", [?MODULE, Op]),
     State;
-do_handle_serial_message(<<"A\n\r">>, #state{plan=Plan,
+do_handle_serial_message(<<"A",_/binary>>, #state{plan=Plan,
                                              planId=PlanId,
                                              active_op=Op,
                                              opsCompleted=CompletedOps,
