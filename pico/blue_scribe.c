@@ -36,6 +36,7 @@ volatile enum Function function = NONE; //variable to keep track of the function
 static int motorTargetX = 0; //variable to keep track of our motor target
 static int motorTargetY = 0; //variable to keep track of our motor target
 static const uint32_t motorSpeed = 62353; //Predefined value to feed into our systick reload register to get our motor to move slow TODO adjust for new HW
+static const int MOTOR_HZ = 100;
 static repeating_timer_t motor_tick_timer; // Timer for motors updating
 
 
@@ -261,8 +262,7 @@ bool startHoming()
     laserState = homing;
 
     // negative timeout means exact delay (rather than delay between callbacks)
-    int hz = 100; // TODO adjust
-    if (!add_repeating_timer_us(-1000000 / hz, motor_tick_timer_callback, NULL, &motor_tick_timer))
+    if (!add_repeating_timer_us(-1000000 / MOTOR_HZ, motor_tick_timer_callback, NULL, &motor_tick_timer))
     {
         printf("ERROR: Failed to add timer\n");
         return false;
@@ -278,8 +278,7 @@ bool startGo(int xDest, int yDest)
         motorTargetY = yDest;
         laserState = moving;
         // start timer
-        int hz = 100; // TODO adjust
-        if (!add_repeating_timer_us(-1000000 / hz, motor_tick_timer_callback, NULL, &motor_tick_timer))
+        if (!add_repeating_timer_us(-1000000 / MOTOR_HZ, motor_tick_timer_callback, NULL, &motor_tick_timer))
         {
             printf("ERROR: Failed to add timer\n");
             return false;
@@ -298,8 +297,7 @@ bool startBurnHorizontal(int distance, int laserPower)
     {
         motorTargetX = motorLocationX + distance; // TODO bounds check
         motorTargetY = motorLocationY;
-        int hz = 100; // TODO adjust
-        bool timerResult = add_repeating_timer_us(-1000000 / hz, motor_tick_timer_callback, NULL, &motor_tick_timer);
+        bool timerResult = add_repeating_timer_us(-1000000 / MOTOR_HZ, motor_tick_timer_callback, NULL, &motor_tick_timer);
         if (timerResult)
         {
             laserState = moving;
@@ -317,8 +315,7 @@ bool startBurnVertical(int distance, int laserPower)
     {
         motorTargetX = motorLocationX;
         motorTargetY = motorLocationY + distance; // TODO bounds check
-        int hz = 100; // TODO adjust
-        bool timerResult = add_repeating_timer_us(-1000000 / hz, motor_tick_timer_callback, NULL, &motor_tick_timer);
+        bool timerResult = add_repeating_timer_us(-1000000 / MOTOR_HZ, motor_tick_timer_callback, NULL, &motor_tick_timer);
         if (timerResult)
         {
             laserState = moving;
@@ -385,7 +382,6 @@ void coreLoop()
             else if (2 == sscanf(serialRxBuf, "GO %d %d", &param1, &param2))
             {
                 // GO command matched
-                // printf("GO (%d, %d)\n", param1, param2);
                 if(!startGo(param1, param2))
                 {
                     printf("ERROR: Not ready\n");
@@ -393,7 +389,6 @@ void coreLoop()
             }
             else if (2 == sscanf(serialRxBuf, "BH %d %d", &param1, &param2))
             {
-                // printf("BH(%d, %d)\n", param1, param2);
                 if (!startBurnHorizontal(param1,  param2))
                 {
                     printf("ERROR: Not ready\n");
@@ -401,7 +396,6 @@ void coreLoop()
             }
             else if (2 == sscanf(serialRxBuf, "BV %d %d", &param1, &param2))
             {
-                // printf("BV(%d, %d)\n", param1, param2);
                 if (!startBurnVertical(param1,  param2))
                 {
                     printf("ERROR: Not ready\n");
@@ -409,7 +403,6 @@ void coreLoop()
             }
             else if (2 == sscanf(serialRxBuf, "SQ %d %d", &param1, &param2))
             {
-                // printf("SQ(%d, %d)\n", param1, param2);
                 if (!startBurnSquare(param1,  param2))
                 {
                     printf("ERROR: Not ready\n");
@@ -442,11 +435,6 @@ int main()
     while (1)
     {
         coreLoop();
-        // sleep_ms(10000);
-        // scanf("%s\n", buf, 128);
-        //fgets(buf, 128, stdin);
-        //sleep_ms(1000);
-        //printf("%s\n", buf, 128);
     }
 }
 
