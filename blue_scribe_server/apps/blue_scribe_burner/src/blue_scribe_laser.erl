@@ -228,9 +228,9 @@ do_setup_serial(Path, Baud, _ListenerPid) ->
 
 -spec do_handle_serial_message(Message :: binary(), State :: #state{}) ->
     {ok, #state{}} | {error, _}.
-do_handle_serial_message(<<"Error\n\r">>, #state{active_op=Op}=State) ->
-    logger:error("~p: Microcontroller responded with error. "
-                 "Active op: ~p", [?MODULE, Op]),
+do_handle_serial_message(<<"ERROR: ",Message/binary>>, #state{active_op=Op}=State) ->
+    logger:error("~p: Microcontroller responded with error: ~p. "
+                 "Active op: ~p", [?MODULE, Message, Op]),
     State;
 do_handle_serial_message(<<"A",_/binary>>, #state{plan=Plan,
                                              planId=PlanId,

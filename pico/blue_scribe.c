@@ -15,6 +15,8 @@
 #define X_MOTOR_DIR 19
 #define Y_MOTOR_STEP 20
 #define Y_MOTOR_DIR 21
+#define X_MOTOR_RST 14
+#define Y_MOTOR_RST 15
 
 #define X_HOME_SWITCH 16
 #define Y_HOME_SWITCH 17
@@ -72,10 +74,17 @@ void initMotorPins()
     gpio_set_dir(X_MOTOR_STEP, GPIO_OUT);
     gpio_init(X_MOTOR_DIR);
     gpio_set_dir(X_MOTOR_DIR, GPIO_OUT);
+    gpio_init(X_MOTOR_RST);
+    gpio_set_dir(X_MOTOR_RST, GPIO_OUT);
+    gpio_put(X_MOTOR_RST, 1);
+
     gpio_init(Y_MOTOR_STEP);
     gpio_set_dir(Y_MOTOR_STEP, GPIO_OUT);
     gpio_init(Y_MOTOR_DIR);
     gpio_set_dir(Y_MOTOR_DIR, GPIO_OUT);
+    gpio_init(Y_MOTOR_RST);
+    gpio_set_dir(Y_MOTOR_RST, GPIO_OUT);
+    gpio_put(Y_MOTOR_RST, 1);
 }
 
 // initialize home limit switch pins
@@ -181,10 +190,11 @@ bool motor_tick_timer_callback(__unused repeating_timer_t *rt)
             setYdir(0);
             bool xhome = gpio_get(X_HOME_SWITCH);
             bool yhome = gpio_get(Y_HOME_SWITCH);
-            if ((xhome && yhome) ||
-            (motorLocationX <= -10 && motorLocationY <= -10)) // TODO for mockup only
+            if (xhome && yhome)
             {
                 laserState = idling;
+                gpio_put(X_MOTOR_RST, 1);
+                gpio_put(Y_MOTOR_RST, 1);
                 motorLocationX = 0;
                 motorLocationY = 0;
                 sendUartAck();
@@ -192,6 +202,7 @@ bool motor_tick_timer_callback(__unused repeating_timer_t *rt)
             }
             if (!xhome)
             {
+                gpio_put(Y_MOTOR_RST, 1);
                 if (step_x())
                 {
                     motorLocationX--; // TODO mockup only
@@ -199,6 +210,7 @@ bool motor_tick_timer_callback(__unused repeating_timer_t *rt)
             }
             if (!yhome)
             {
+                gpio_put(X_MOTOR_RST, 1);
                 if(step_y())
                 {
                     motorLocationY--; // TODO mockup only
@@ -210,6 +222,8 @@ bool motor_tick_timer_callback(__unused repeating_timer_t *rt)
             if (motorTargetX == motorLocationX && motorTargetY == motorLocationY)
             {
                 // destination point reached
+                gpio_put(X_MOTOR_RST, 1);
+                gpio_put(Y_MOTOR_RST, 1);
                 laserState = idling;
                 setLaser(0);
                 sendUartAck();
@@ -260,6 +274,8 @@ bool startHoming()
     setLaser(0);
     // move into homing mode
     laserState = homing;
+    gpio_put(X_MOTOR_RST, 0);
+    gpio_put(Y_MOTOR_RST, 0);
 
     // negative timeout means exact delay (rather than delay between callbacks)
     if (!add_repeating_timer_us(-1000000 / MOTOR_HZ, motor_tick_timer_callback, NULL, &motor_tick_timer))
@@ -276,6 +292,8 @@ bool startGo(int xDest, int yDest)
         setLaser(0);
         motorTargetX = xDest;
         motorTargetY = yDest;
+        gpio_put(X_MOTOR_RST, 0);
+        gpio_put(Y_MOTOR_RST, 0);
         laserState = moving;
         // start timer
         if (!add_repeating_timer_us(-1000000 / MOTOR_HZ, motor_tick_timer_callback, NULL, &motor_tick_timer))
@@ -297,6 +315,7 @@ bool startBurnHorizontal(int distance, int laserPower)
     {
         motorTargetX = motorLocationX + distance; // TODO bounds check
         motorTargetY = motorLocationY;
+        gpio_put(X_MOTOR_RST, 0);
         bool timerResult = add_repeating_timer_us(-1000000 / MOTOR_HZ, motor_tick_timer_callback, NULL, &motor_tick_timer);
         if (timerResult)
         {
@@ -315,6 +334,7 @@ bool startBurnVertical(int distance, int laserPower)
     {
         motorTargetX = motorLocationX;
         motorTargetY = motorLocationY + distance; // TODO bounds check
+        gpio_put(Y_MOTOR_RST, 0);
         bool timerResult = add_repeating_timer_us(-1000000 / MOTOR_HZ, motor_tick_timer_callback, NULL, &motor_tick_timer);
         if (timerResult)
         {
