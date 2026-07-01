@@ -179,8 +179,8 @@ static ERL_NIF_TERM do_image_to_plan(ErlNifEnv* env, int argc, const ERL_NIF_TER
     cv::Mat image = matMap.at(imageResource->id);
     cv::Size imageSize = image.size();
     std::vector<ERL_NIF_TERM> imageOps;
-    int xLimit = imageSize.width;
-    int yLimit = imageSize.height;
+    int xLimit = imageSize.width-1;
+    int yLimit = imageSize.height-1;
 
     for (int r = 0; r < yLimit; r++)
     {
@@ -241,7 +241,7 @@ static ERL_NIF_TERM do_image_to_plan(ErlNifEnv* env, int argc, const ERL_NIF_TER
                                 pixHere);
 
                     ERL_NIF_TERM burnOp =
-                        make_simple_laser_op(env, burnCmd, c*MOTOR_SCALE, r*MOTOR_SCALE);
+                        make_simple_laser_op(env, burnCmd, (c+1)*MOTOR_SCALE, r*MOTOR_SCALE);
                     imageOps.push_back(burnOp);
                     c += extend; // account for contiguous block
                 }
