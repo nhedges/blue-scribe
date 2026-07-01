@@ -75,8 +75,9 @@ handle_call({start_burn, PlanId, PowerScale}, _From, #state{plan=undefined,
     case blue_scribe_plan:get_plan(PlanId) of
         {ok, Plan} ->
             blue_scribe_plan_db:increment_plan_start_counter(PlanId),
+            NewPlan = [#laser_command{class='HM', arg1=0, arg2=0} | Plan],
             {ActiveOp, RestPlan} =
-            do_advance_plan(undefined, Plan),
+            do_advance_plan(undefined, NewPlan),
             do_run_op(ActiveOp, PowerScale, SerialPid),
             {reply, ok, State#state{plan=RestPlan,
                                     planId=PlanId,
@@ -231,7 +232,7 @@ do_setup_serial(Path, Baud, _ListenerPid) ->
 do_handle_serial_message(<<"ERROR: ",Message/binary>>, #state{active_op=Op}=State) ->
     logger:error("~p: Microcontroller responded with error: ~p. "
                  "Active op: ~p", [?MODULE, Message, Op]),
-    State;
+    {ok, State};
 do_handle_serial_message(<<"A",_/binary>>, #state{plan=Plan,
                                              planId=PlanId,
                                              active_op=Op,
@@ -348,7 +349,7 @@ do_run_cmd(Cmd, PowerScale, Pid) ->
 
 -spec do_format_command(Cmd :: #laser_command{}) -> binary().
 do_format_command(#laser_command{class='HM'}) ->
-    <<"HM\n\r">>;
+    <<"HM 0 0\n\r">>;
 do_format_command(#laser_command{class=Class,
                                  arg1 = Arg1,
                                  arg2 = Arg2}) ->
