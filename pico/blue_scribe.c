@@ -37,8 +37,7 @@ volatile enum IoState ioState = recving; //variable to keep track of the state w
 volatile enum Function function = NONE; //variable to keep track of the function that was originally called
 static int motorTargetX = 0; //variable to keep track of our motor target
 static int motorTargetY = 0; //variable to keep track of our motor target
-static const uint32_t motorSpeed = 62353; //Predefined value to feed into our systick reload register to get our motor to move slow TODO adjust for new HW
-static const int MOTOR_HZ = 100;
+static const int MOTOR_HZ = 200;
 static repeating_timer_t motor_tick_timer; // Timer for motors updating
 
 
@@ -95,10 +94,10 @@ void initHomeSwitchPins()
     // We are using the button to pull down to 0v when pressed, so ensure that when
     // unpressed, it uses internal pull ups. Otherwise when unpressed, the input will
     // be floating.
-    gpio_pull_down(X_HOME_SWITCH);
+    gpio_pull_up(X_HOME_SWITCH);
     gpio_init(Y_HOME_SWITCH);
     gpio_set_dir(Y_HOME_SWITCH, GPIO_IN);
-    gpio_pull_down(Y_HOME_SWITCH);
+    gpio_pull_up(Y_HOME_SWITCH);
 }
 
 // initialize PWM for laser
@@ -127,13 +126,13 @@ void initLaserAdc()
 
 void setXdir(uint8_t direction)
 {
-    gpio_put(X_MOTOR_DIR, direction);
+    gpio_put(X_MOTOR_DIR, direction ? 0:1);
     directionX = direction;
 }
 
 void setYdir(uint8_t direction)
 {
-    gpio_put(Y_MOTOR_DIR, direction);
+    gpio_put(Y_MOTOR_DIR, direction ? 0:1);
     directionY = direction;
 }
 
@@ -188,8 +187,8 @@ bool motor_tick_timer_callback(__unused repeating_timer_t *rt)
         case homing:
             setXdir(0);
             setYdir(0);
-            bool xhome = gpio_get(X_HOME_SWITCH);
-            bool yhome = gpio_get(Y_HOME_SWITCH);
+            bool xhome = !gpio_get(X_HOME_SWITCH);
+            bool yhome = !gpio_get(Y_HOME_SWITCH);
             if (xhome && yhome)
             {
                 laserState = idling;
