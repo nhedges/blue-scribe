@@ -159,6 +159,7 @@ create_plan(Req0, State) ->
     case CreateRes of
         {ok, NewPlanId} ->
             logger:notice("~p: Created new plan with id ~p", [?MODULE, NewPlanId]),
+            blue_scribe_plan:optimize(NewPlanId),
             {true, Req1, State};
         {error, Err} ->
             logger:warning("~p: Plan not created because ~p", [?MODULE, Err]),

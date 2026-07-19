@@ -3,7 +3,7 @@
 
 -export([load_plan/1, unload_plan/1, get_plan/1, get_dimensions/1,
          get_plan_id_time_estimate/1, get_plan_time_estimate/1,
-         get_plan_time_estimate_seconds/1, start_link/1]).
+         get_plan_time_estimate_seconds/1, start_link/1, optimize/1]).
 
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2]).
 
@@ -15,7 +15,7 @@
 -define(COEF_PIXELS_TO_SECONDS, 1/400.0).
 
 -record(state,
-        {plan, image}).
+        {id, plan, image}).
 
 -spec load_plan(Id :: non_neg_integer()) -> {ok, non_neg_integer()} | {error,_}.
 load_plan(Id) ->
@@ -87,6 +87,11 @@ get_plan_time_estimate_([#laser_command{class='HM'} | RestOps],
     MovementTime = max(abs(Cx), abs(Cy)),
     get_plan_time_estimate_(RestOps, 0, 0, Timesum + MovementTime).
 
+-spec optimize(Id::non_neg_integer()) -> ok.
+optimize(Id) ->
+    load_plan(Id),
+    gen_server:cast({global, {?MODULE, Id}}, optimize).
+
 start_link(Id) ->
     gen_server:start_link({global, {?MODULE, Id}}, ?MODULE, [Id], []).
 
@@ -107,7 +112,7 @@ init([Id]) ->
             logger:error("~p: Error: plan ~p not found", [?MODULE, Id]),
             blue_scribe_plan_image:do_image_to_plan(ImgCropped)
     end,
-    {ok, #state{plan=Plan, image=Img}, ?TIMEOUT}.
+    {ok, #state{id=Id, plan=Plan, image=Img}, ?TIMEOUT}.
 
 handle_call(get_plan, _From, #state{plan=Plan}=State) ->
     {reply, {ok, Plan}, State, ?TIMEOUT};
@@ -122,6 +127,21 @@ handle_call(Call, _, State) ->
 
 handle_cast(unload, State) ->
     {stop, normal, State};
+
+handle_cast(optimize, State=#state{id=Id, plan=Plan}) ->
+    BeforeTimeEstimate = get_plan_time_estimate(Plan),
+    OptimizedPlan = blue_scribe_plan_optimize:greedy_optimize(Plan),
+    AfterTimeEstimate = get_plan_time_estimate(OptimizedPlan),
+    case (BeforeTimeEstimate-AfterTimeEstimate) of
+        Diff when Diff > 0 ->
+            io:format("~p: Plan gained ~p in optimization~n", [?MODULE, Diff]),
+            % persist the optimized version of the plan
+            blue_scribe_plan_db:update_plan_op_list(Id, OptimizedPlan),
+            {noreply, State#state{plan=OptimizedPlan}};
+        _ ->
+            io:format("~p: Plan optimization had no improvement~n", [?MODULE]),
+            {noreply, State}
+    end;
 
 handle_cast(Cast, State) ->
     logger:warning("~p: Unknown cast ~p", [?MODULE, Cast]),
