@@ -126,7 +126,6 @@ handle_call({corner, CornerPlanId}, _From, #state{plan=undefined,
 
 handle_call({corner, CornerPlanId}, _From, #state{planId={corner_alignment, CornerPlanId},
                                                   serial_pid=SerialPid,
-                                                  active_op=undefined,
                                                   corner_alignment={CA, W, H}}=State) ->
     {RunOpRes, Op, NewCa} = do_corner_alignment(CA, W, H, SerialPid),
     case NewCa of
@@ -261,15 +260,23 @@ do_handle_serial_message(<<"A",_/binary>>, #state{plan=Plan,
                                true -> length(NewPlan);
                                false -> undefined
                            end, NewActiveOp]),
-    case {Op, NewActiveOp, NewPlan} of % increment if the plan is finishing (not cancelled)
-        {AO, undefined, undefined} when AO =/= undefined ->
-            logger:debug("~p: Incremeting plan counter for ~p", [?MODULE, PlanId]),
-            blue_scribe_plan_db:increment_plan_finish_counter(PlanId);
-        _ -> ok
-    end,
-    {ok, State#state{plan=NewPlan,
-                     active_op=NewActiveOp,
-                     opsCompleted=CompletedOps+1}}.
+    logger:debug("~p: Deciding next steps: {~p, ~p, ~p, ~p}", [?MODULE, Op, NewActiveOp, NewPlan, PlanId]),
+    case {Op, NewActiveOp, NewPlan, PlanId} of % increment if the plan is finishing (not cancelled)
+        {_, undefined, undefined, {corner_alignment, _}} ->
+            logger:debug("~p: Done with a cornering op", [?MODULE]),
+            {ok, State};
+        {AO, undefined, undefined, _} when AO =/= undefined ->
+            logger:debug("~p: Incremeting plan counter for plan ~p", [?MODULE, PlanId]),
+            blue_scribe_plan_db:increment_plan_finish_counter(PlanId),
+            {ok, State#state{plan=undefined,
+                             active_op=undefined,
+                             opsCompleted=0,
+                             planId=undefined}};
+        _ ->
+            {ok, State#state{plan=NewPlan,
+                             active_op=NewActiveOp,
+                             opsCompleted=CompletedOps+1}}
+    end.
 
 -spec do_get_next_cmd(Op :: laser_cmdop()|undefined) -> #laser_command{} | undefined.
 do_get_next_cmd(#laser_command{}=Cmd) -> Cmd;

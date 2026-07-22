@@ -72,7 +72,9 @@ to_html(Req0, #state{planId=Id, powerScale=corner_alignment}=State) ->
     Result =
     case do_corner_align(Id) of
         ok -> true;
-        {error, _} -> false
+        {error, Err} ->
+        logger:warning("~p: corner align issue: ~p", [?MODULE, Err]),
+        false
     end,
     {Result, Req0, State};
 
