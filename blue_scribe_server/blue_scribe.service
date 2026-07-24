@@ -1,0 +1,13 @@
+[Unit]
+Description=Blue Scribe Laser Engraver
+
+[Service]
+Type=simple
+ExecStart=/opt/blue_scribe_server/bin/blue_scribe_server foreground
+Restart=on-failure
+RestartSec=30
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
