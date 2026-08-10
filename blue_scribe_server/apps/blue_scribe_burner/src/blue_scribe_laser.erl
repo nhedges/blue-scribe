@@ -20,6 +20,7 @@
                planId :: non_neg_integer() | {corner_alignment, non_neg_integer()} | undefined,
                plan :: laser_plan() | undefined,
                active_op :: laser_cmdop() | undefined,
+               op_retry_count = 0 :: non_neg_integer(),
                opsCompleted = 0 :: non_neg_integer(),
                corner_alignment :: {0..3, non_neg_integer(), non_neg_integer()} | undefined,
                powerScale=1.0 :: float(),
@@ -231,7 +232,7 @@ do_setup_serial(Path, Baud, _ListenerPid) ->
 do_handle_serial_message(<<"ERROR: ",Message/binary>>, #state{active_op=Op}=State) ->
     logger:error("~p: Microcontroller responded with error: ~p. "
                  "Active op: ~p", [?MODULE, Message, Op]),
-    {ok, State};
+    do_handle_microcontroller_error(State);
 do_handle_serial_message(<<"A",_/binary>>, #state{plan=Plan,
                                              planId=PlanId,
                                              active_op=Op,
@@ -271,11 +272,39 @@ do_handle_serial_message(<<"A",_/binary>>, #state{plan=Plan,
             {ok, State#state{plan=undefined,
                              active_op=undefined,
                              opsCompleted=0,
+                             op_retry_count=0,
                              planId=undefined}};
         _ ->
             {ok, State#state{plan=NewPlan,
                              active_op=NewActiveOp,
+                             op_retry_count=0,
                              opsCompleted=CompletedOps+1}}
+    end.
+
+-spec do_handle_microcontroller_error(State :: #state{}) ->
+    {ok, #state{}} | {error, _}.
+do_handle_microcontroller_error(State=#state{active_op=undefined}) ->
+    {ok, State};
+do_handle_microcontroller_error(State=#state{active_op=ActiveOp,
+                                            paused=Paused,
+                                            powerScale=PowerScale,
+                                            serial_pid=SerialPid,
+                                            op_retry_count=Retry}) ->
+    case Retry >= 3 of
+        true ->
+            logger:error("~p: Op failed after ~p retries: ", [?MODULE, ActiveOp, Retry]),
+            {error, "Op failed after multiple retries"};
+        false ->
+            % schedule the re-try
+            case {Paused, do_get_next_cmd(ActiveOp)} of
+                {true,_} -> do_nothing;
+                {_, undefined} ->
+                    logger:debug("~p: undefined next cmd", [?MODULE]),
+                    do_nothing;
+                {_, Cmd} ->
+                    ok = do_run_cmd(Cmd, PowerScale, SerialPid)
+            end,
+            {ok, State#state{op_retry_count=Retry+1}}
     end.
 
 -spec do_get_next_cmd(Op :: laser_cmdop()|undefined) -> #laser_command{} | undefined.
