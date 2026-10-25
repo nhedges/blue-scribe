@@ -294,6 +294,7 @@ bool startHoming()
     gpio_put(Y_MOTOR_RST, MOTOR_ACTIVE_POWER);
 
     // negative timeout means exact delay (rather than delay between callbacks)
+    cancel_repeating_timer(&motor_tick_timer);
     if (!add_repeating_timer_us(-1000000 / MOTOR_HZ, motor_tick_timer_callback, NULL, &motor_tick_timer))
     {
         printf("ERROR: Failed to add timer\n");
@@ -312,6 +313,7 @@ bool startGo(int xDest, int yDest)
         gpio_put(Y_MOTOR_RST, MOTOR_ACTIVE_POWER);
         laserState = moving;
         // start timer
+        cancel_repeating_timer(&motor_tick_timer);
         if (!add_repeating_timer_us(-1000000 / MOTOR_HZ, motor_tick_timer_callback, NULL, &motor_tick_timer))
         {
             printf("ERROR: Failed to add timer\n");
@@ -332,6 +334,7 @@ bool startBurnHorizontal(int distance, int laserPower)
         motorTargetX = motorLocationX + distance; // TODO bounds check
         motorTargetY = motorLocationY;
         gpio_put(X_MOTOR_RST, MOTOR_ACTIVE_POWER);
+        cancel_repeating_timer(&motor_tick_timer);
         bool timerResult = add_repeating_timer_us(-1000000 / MOTOR_HZ, motor_tick_timer_callback, NULL, &motor_tick_timer);
         if (timerResult)
         {
@@ -351,6 +354,7 @@ bool startBurnVertical(int distance, int laserPower)
         motorTargetX = motorLocationX;
         motorTargetY = motorLocationY + distance; // TODO bounds check
         gpio_put(Y_MOTOR_RST, MOTOR_ACTIVE_POWER);
+        cancel_repeating_timer(&motor_tick_timer);
         bool timerResult = add_repeating_timer_us(-1000000 / MOTOR_HZ, motor_tick_timer_callback, NULL, &motor_tick_timer);
         if (timerResult)
         {
