@@ -35,6 +35,8 @@
 #define UART_ID uart0
 #define BAUD_RATE 115200
 
+#define LASER_IDLE 1
+
 enum LaserState {idling, moving, homing};
 enum IoState {recving, parsing, sending};
 enum Function {GO, HM, SQ, NONE};
@@ -124,7 +126,7 @@ void initLaserPwm()
     pwm_config_set_clkdiv(&config, 300.f);
     // Load the configuration into our PWM slice, and set it running.
     pwm_init(slice_num, &config, true);
-    pwm_set_gpio_level(LASER_POWER_CONTROL, 0);
+    setLaser(LASER_IDLE);
 }
 
 // initialize ADC for laser thermometer
@@ -239,7 +241,7 @@ bool motor_tick_timer_callback(__unused repeating_timer_t *rt)
                 gpio_put(X_MOTOR_RST, MOTOR_LOW_POWER);
                 gpio_put(Y_MOTOR_RST, MOTOR_LOW_POWER);
                 laserState = idling;
-                setLaser(0);
+                setLaser(LASER_IDLE);
                 sendUartAck();
                 return false;
             }
@@ -285,7 +287,7 @@ bool startHoming()
 {
     // Don't care about current motor state
     // set power level PWM to zero
-    setLaser(0);
+    setLaser(LASER_IDLE);
     // move into homing mode
     laserState = homing;
     gpio_put(X_MOTOR_RST, MOTOR_ACTIVE_POWER);
@@ -303,7 +305,7 @@ bool startGo(int xDest, int yDest)
 {
     if (laserState == idling)
     {
-        setLaser(0);
+        setLaser(LASER_IDLE);
         motorTargetX = xDest;
         motorTargetY = yDest;
         gpio_put(X_MOTOR_RST, MOTOR_ACTIVE_POWER);
